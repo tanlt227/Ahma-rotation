@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useCalendar } from '../context/CalendarContext';
 import { translations } from '../data/i18n';
+import { solveChatLocally } from '../data/chatbotSolver';
 import {
   MessageSquare,
   X,
@@ -27,7 +28,7 @@ interface ChatbotModalProps {
 }
 
 export const ChatbotModal: React.FC<ChatbotModalProps> = ({ isOpen, onClose }) => {
-  const { language } = useCalendar();
+  const { language, settings, overrides, rosterWeeks } = useCalendar();
   const t = translations[language];
 
   const [input, setInput] = useState('');
@@ -38,7 +39,7 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({ isOpen, onClose }) =
       sender: 'bot',
       text:
         language === 'zh'
-          ? '您好！我是阿嬷日程小助手。您可以问我：\n• 某一天阿嬷住在谁家（家超、家源、家文）\n• 俊杰的上下班排班时间\n• 新加坡公共假期安排'
+          ? '您好！我是阿嬷日程小助手。您可以问我：\n• 某一天阿嬷住在谁家（启超、启源、启文）\n• 俊杰的上下班排班时间\n• 新加坡公共假期安排'
           : "Hello! I'm your Ahma's Rotation assistant. Ask me anything about where Ahma is staying (Kay Cheow, Kay Guan, Kay Boon), Jun Jie's work shift, or upcoming Singapore public holidays!",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
@@ -72,35 +73,43 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({ isOpen, onClose }) =
     setLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, language }),
-      });
+      let replyText = '';
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, language }),
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        const botMsg: ChatMessage = {
-          id: `bot-${Date.now()}`,
-          sender: 'bot',
-          text: data.reply || (language === 'zh' ? '暂未获取到答案，请稍后再试。' : 'No reply received.'),
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        setMessages((prev) => [...prev, botMsg]);
-      } else {
-        throw new Error('API failed');
+        if (res.ok) {
+          const data = await res.json();
+          replyText = data.reply;
+        }
+      } catch {
+        // Backend not available (e.g. static hosting or offline)
       }
-    } catch (e) {
-      const errorMsg: ChatMessage = {
-        id: `bot-err-${Date.now()}`,
+
+      // If backend is not available or returned empty, use instant offline local solver
+      if (!replyText) {
+        replyText = solveChatLocally(text, language, settings, overrides, rosterWeeks);
+      }
+
+      const botMsg: ChatMessage = {
+        id: `bot-${Date.now()}`,
         sender: 'bot',
-        text:
-          language === 'zh'
-            ? '抱歉，服务暂时繁忙，请稍后再试。'
-            : 'Sorry, could not connect to assistant right now. Please try again.',
+        text: replyText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
-      setMessages((prev) => [...prev, errorMsg]);
+      setMessages((prev) => [...prev, botMsg]);
+    } catch (e) {
+      const fallback = solveChatLocally(text, language, settings, overrides, rosterWeeks);
+      const botMsg: ChatMessage = {
+        id: `bot-fallback-${Date.now()}`,
+        sender: 'bot',
+        text: fallback,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, botMsg]);
     } finally {
       setLoading(false);
     }

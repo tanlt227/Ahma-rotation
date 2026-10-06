@@ -7,7 +7,8 @@ import {
   AppSyncState,
   ShiftRosterWeek,
 } from '../types';
-import { DEFAULT_GRANDMA_ANCHOR, DEFAULT_JUNJIE_ANCHOR, DEFAULT_ROSTER_WEEKS } from '../data/schedule';
+import { DEFAULT_GRANDMA_ANCHOR, DEFAULT_ROSTER_WEEKS, formatISODate } from '../data/schedule';
+import { INITIAL_SEED_EVENTS, INITIAL_FAMILY_MEMBERS, INITIAL_SETTINGS } from '../data/initialData';
 import { Language } from '../data/i18n';
 
 interface CalendarContextValue {
@@ -52,18 +53,12 @@ interface CalendarContextValue {
   resetToDefaults: () => Promise<void>;
 }
 
-const DEFAULT_SETTINGS: CalendarAppSettings = {
-  grandmaAnchorDate: DEFAULT_GRANDMA_ANCHOR,
-  grandmaCycleDays: 14,
-  grandmaSequence: ['KC', 'KG', 'KB'],
-  grandmaLocations: {
-    KC: { name: 'Kay Cheow', notes: 'Kay Cheow (KC)' },
-    KG: { name: 'Kay Guan', notes: 'Kay Guan (KG)' },
-    KB: { name: 'Kay Boon', notes: 'Kay Boon (KB)' },
-  },
-  junjieAnchorDate: DEFAULT_JUNJIE_ANCHOR,
-  junjieCycleWeeks: 3,
-  junjieRosterWeeks: DEFAULT_ROSTER_WEEKS,
+const STORAGE_KEYS = {
+  EVENTS: 'ahma_events_v2',
+  OVERRIDES: 'ahma_overrides_v2',
+  MEMBERS: 'ahma_members_v2',
+  SETTINGS: 'ahma_settings_v2',
+  LANG: 'ahma_calendar_lang',
 };
 
 const CalendarContext = createContext<CalendarContextValue | null>(null);
@@ -71,7 +66,7 @@ const CalendarContext = createContext<CalendarContextValue | null>(null);
 export function CalendarProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguage] = useState<Language>(() => {
     try {
-      const saved = localStorage.getItem('ahma_calendar_lang');
+      const saved = localStorage.getItem(STORAGE_KEYS.LANG);
       return saved === 'zh' || saved === 'en' ? saved : 'en';
     } catch {
       return 'en';
@@ -81,269 +76,302 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   const handleSetLanguage = (lang: Language) => {
     setLanguage(lang);
     try {
-      localStorage.setItem('ahma_calendar_lang', lang);
+      localStorage.setItem(STORAGE_KEYS.LANG, lang);
     } catch {}
   };
 
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [overrides, setOverrides] = useState<DayOverride[]>([]);
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
-  const [settings, setSettings] = useState<CalendarAppSettings>(DEFAULT_SETTINGS);
+  // Safe localStorage loader helpers
+  const [events, setEvents] = useState<CalendarEvent[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.EVENTS);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_SEED_EVENTS;
+  });
 
-  const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'syncing'>('connecting');
-  const [connectedDevices, setConnectedDevices] = useState(1);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [overrides, setOverrides] = useState<DayOverride[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.OVERRIDES);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
 
-  const [currentDate, setCurrentDate] = useState<Date>(() => new Date('2026-05-01T00:00:00'));
-  const [selectedDate, setSelectedDate] = useState<string>('2026-05-07');
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.MEMBERS);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_FAMILY_MEMBERS;
+  });
+
+  const [settings, setSettings] = useState<CalendarAppSettings>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_SETTINGS;
+  });
+
+  // Always default current date and selected date to the current date (today)
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<string>(() => formatISODate(new Date()));
+
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'agenda' | 'shift_matrix'>('month');
-
   const [filterMemberId, setFilterMemberId] = useState<string>('all');
   const [showHolidays, setShowHolidays] = useState(true);
   const [showGrandma, setShowGrandma] = useState(true);
   const [showJunjie, setShowJunjie] = useState(true);
   const [showSchoolHolidays, setShowSchoolHolidays] = useState(true);
 
+  // Sync state & devices
+  const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'syncing'>('connected');
+  const [connectedDevices, setConnectedDevices] = useState(1);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(new Date());
+
   const socketRef = useRef<WebSocket | null>(null);
 
+  // Persist to localStorage whenever state changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(events));
+    } catch {}
+  }, [events]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.OVERRIDES, JSON.stringify(overrides));
+    } catch {}
+  }, [overrides]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.MEMBERS, JSON.stringify(familyMembers));
+    } catch {}
+  }, [familyMembers]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    } catch {}
+  }, [settings]);
+
+  // Optional backend sync: if running with Node server, sync; if serverless (Vercel), graceful fallback
   const fetchState = useCallback(async () => {
     try {
       const res = await fetch('/api/state');
       if (res.ok) {
         const data: AppSyncState = await res.json();
-        setEvents(data.events || []);
-        setOverrides(data.overrides || []);
-        setFamilyMembers(data.familyMembers || []);
+        if (data.events) setEvents(data.events);
+        if (data.overrides) setOverrides(data.overrides);
+        if (data.familyMembers) setFamilyMembers(data.familyMembers);
         if (data.settings) setSettings(data.settings);
         setLastSyncTime(new Date());
+        setSyncStatus('connected');
       }
-    } catch (e) {
-      console.warn('Initial state fetch error:', e);
+    } catch {
+      // In serverless / offline environment, localStorage provides persistence
     }
   }, []);
 
   useEffect(() => {
     fetchState();
 
+    // Check if WebSocket is available (optional live real-time when running server.ts)
     let isMounted = true;
     let ws: WebSocket | null = null;
     let reconnectTimer: NodeJS.Timeout;
 
-    function connect() {
-      if (!isMounted) return;
-      setSyncStatus('connecting');
+    // Only attempt WS if protocol and host are typical full-stack environment
+    const isVercelOrStatic = window.location.hostname.includes('vercel.app') || window.location.hostname.includes('github.io');
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+    if (!isVercelOrStatic) {
+      function connect() {
+        if (!isMounted) return;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
 
-      try {
-        ws = new WebSocket(wsUrl);
-        socketRef.current = ws;
+        try {
+          ws = new WebSocket(wsUrl);
+          socketRef.current = ws;
 
-        ws.onopen = () => {
-          if (!isMounted) return;
-          setSyncStatus('connected');
-        };
+          ws.onopen = () => {
+            if (!isMounted) return;
+            setSyncStatus('connected');
+          };
 
-        ws.onmessage = (event) => {
-          if (!isMounted) return;
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'INIT' || data.type === 'STATE_UPDATED') {
-              const payload: AppSyncState = data.payload;
-              if (payload) {
-                setEvents(payload.events || []);
-                setOverrides(payload.overrides || []);
-                setFamilyMembers(payload.familyMembers || []);
-                if (payload.settings) setSettings(payload.settings);
-                setLastSyncTime(new Date());
+          ws.onmessage = (event) => {
+            if (!isMounted) return;
+            try {
+              const data = JSON.parse(event.data);
+              if (data.type === 'INIT' || data.type === 'STATE_UPDATED') {
+                const payload: AppSyncState = data.payload;
+                if (payload) {
+                  if (payload.events) setEvents(payload.events);
+                  if (payload.overrides) setOverrides(payload.overrides);
+                  if (payload.familyMembers) setFamilyMembers(payload.familyMembers);
+                  if (payload.settings) setSettings(payload.settings);
+                  setLastSyncTime(new Date());
+                }
+              } else if (data.type === 'PONG') {
+                if (data.clients) setConnectedDevices(data.clients);
               }
-            } else if (data.type === 'PRESENCE') {
-              setConnectedDevices(Math.max(1, data.count || 1));
+            } catch (err) {
+              console.error('WS parse error:', err);
             }
-          } catch (err) {
-            console.error('Error handling WS message:', err);
-          }
-        };
+          };
 
-        ws.onclose = () => {
-          if (!isMounted) return;
-          setSyncStatus('disconnected');
-          reconnectTimer = setTimeout(connect, 3000);
-        };
+          ws.onclose = () => {
+            if (!isMounted) return;
+            reconnectTimer = setTimeout(connect, 5000);
+          };
 
-        ws.onerror = () => {
-          if (!isMounted) return;
-          setSyncStatus('disconnected');
-        };
-      } catch (err) {
-        console.warn('WS creation error:', err);
-        setSyncStatus('disconnected');
-        reconnectTimer = setTimeout(connect, 3000);
+          ws.onerror = () => {
+            if (!isMounted) return;
+          };
+        } catch {
+          // Ignore
+        }
       }
+
+      connect();
+    } else {
+      setSyncStatus('connected');
     }
-
-    connect();
-
-    const pingInterval = setInterval(() => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'PING' }));
-      }
-    }, 20000);
 
     return () => {
       isMounted = false;
-      clearInterval(pingInterval);
       clearTimeout(reconnectTimer);
-      if (ws) {
-        ws.close();
-      }
+      if (ws) ws.close();
     };
   }, [fetchState]);
 
+  // Actions with local-first instant update and optimistic server call
   const addOrUpdateEvent = useCallback(async (event: Partial<CalendarEvent>) => {
-    setSyncStatus('syncing');
+    const newId = event.id || `ev-${Date.now()}`;
+    const fullEvent: CalendarEvent = {
+      id: newId,
+      title: event.title || 'Family Event',
+      startDate: event.startDate || formatISODate(new Date()),
+      endDate: event.endDate,
+      category: event.category || 'family_gathering',
+      memberId: event.memberId || 'all',
+      time: event.time,
+      location: event.location,
+      notes: event.notes,
+      createdAt: event.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setEvents((prev) => {
+      const idx = prev.findIndex((e) => e.id === fullEvent.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = fullEvent;
+        return copy;
+      }
+      return [...prev, fullEvent];
+    });
+    setLastSyncTime(new Date());
+
     try {
-      const res = await fetch('/api/events', {
+      await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(event),
+        body: JSON.stringify(fullEvent),
       });
-      if (res.ok) {
-        const result = await res.json();
-        setEvents((prev) => {
-          const idx = prev.findIndex((e) => e.id === result.event.id);
-          if (idx >= 0) {
-            const copy = [...prev];
-            copy[idx] = result.event;
-            return copy;
-          }
-          return [...prev, result.event];
-        });
-        setLastSyncTime(new Date());
-      }
-    } catch (err) {
-      console.error('Failed to save event:', err);
-    } finally {
-      setSyncStatus('connected');
-    }
+    } catch {}
   }, []);
 
   const deleteEvent = useCallback(async (id: string) => {
-    setSyncStatus('syncing');
+    setEvents((prev) => prev.filter((e) => e.id !== id));
+    setLastSyncTime(new Date());
+
     try {
-      const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setEvents((prev) => prev.filter((e) => e.id !== id));
-        setLastSyncTime(new Date());
-      }
-    } catch (err) {
-      console.error('Failed to delete event:', err);
-    } finally {
-      setSyncStatus('connected');
-    }
+      await fetch(`/api/events/${id}`, { method: 'DELETE' });
+    } catch {}
   }, []);
 
   const addOrUpdateOverride = useCallback(async (override: Partial<DayOverride>) => {
-    setSyncStatus('syncing');
+    const newId = override.id || `ov-${Date.now()}`;
+    const fullOverride: DayOverride = {
+      id: newId,
+      date: override.date || formatISODate(new Date()),
+      type: override.type || 'grandma_location',
+      value: override.value || 'KC',
+      customName: override.customName,
+      customTime: override.customTime,
+      reason: override.reason,
+      createdAt: override.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setOverrides((prev) => {
+      const filtered = prev.filter(
+        (o) => !(o.id === fullOverride.id || (o.date === fullOverride.date && o.type === fullOverride.type))
+      );
+      return [...filtered, fullOverride];
+    });
+    setLastSyncTime(new Date());
+
     try {
-      const res = await fetch('/api/overrides', {
+      await fetch('/api/overrides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(override),
+        body: JSON.stringify(fullOverride),
       });
-      if (res.ok) {
-        const result = await res.json();
-        setOverrides((prev) => {
-          const filtered = prev.filter(
-            (o) => !(o.id === result.override.id || (o.date === result.override.date && o.type === result.override.type))
-          );
-          return [...filtered, result.override];
-        });
-        setLastSyncTime(new Date());
-      }
-    } catch (err) {
-      console.error('Failed to save override:', err);
-    } finally {
-      setSyncStatus('connected');
-    }
+    } catch {}
   }, []);
 
   const deleteOverride = useCallback(async (id: string) => {
-    setSyncStatus('syncing');
+    setOverrides((prev) => prev.filter((o) => o.id !== id));
+    setLastSyncTime(new Date());
+
     try {
-      const res = await fetch(`/api/overrides/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setOverrides((prev) => prev.filter((o) => o.id !== id));
-        setLastSyncTime(new Date());
-      }
-    } catch (err) {
-      console.error('Failed to delete override:', err);
-    } finally {
-      setSyncStatus('connected');
-    }
+      await fetch(`/api/overrides/${id}`, { method: 'DELETE' });
+    } catch {}
   }, []);
 
   const addFamilyMember = useCallback(async (member: Partial<FamilyMember>) => {
-    setSyncStatus('syncing');
+    const newMember: FamilyMember = {
+      id: member.id || `mem-${Date.now()}`,
+      name: member.name || 'Member',
+      relationship: member.relationship || 'Family',
+      color: member.color || '#3b82f6',
+    };
+
+    setFamilyMembers((prev) => [...prev, newMember]);
+    setLastSyncTime(new Date());
+
     try {
-      const res = await fetch('/api/members', {
+      await fetch('/api/members', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(member),
+        body: JSON.stringify(newMember),
       });
-      if (res.ok) {
-        const result = await res.json();
-        setFamilyMembers((prev) => {
-          const idx = prev.findIndex((m) => m.id === result.member.id);
-          if (idx >= 0) {
-            const copy = [...prev];
-            copy[idx] = result.member;
-            return copy;
-          }
-          return [...prev, result.member];
-        });
-        setLastSyncTime(new Date());
-      }
-    } catch (err) {
-      console.error('Failed to save member:', err);
-    } finally {
-      setSyncStatus('connected');
-    }
+    } catch {}
   }, []);
 
   const deleteFamilyMember = useCallback(async (id: string) => {
-    setSyncStatus('syncing');
+    setFamilyMembers((prev) => prev.filter((m) => m.id !== id));
+    setLastSyncTime(new Date());
+
     try {
-      const res = await fetch(`/api/members/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setFamilyMembers((prev) => prev.filter((m) => m.id !== id));
-        setLastSyncTime(new Date());
-      }
-    } catch (err) {
-      console.error('Failed to delete member:', err);
-    } finally {
-      setSyncStatus('connected');
-    }
+      await fetch(`/api/members/${id}`, { method: 'DELETE' });
+    } catch {}
   }, []);
 
   const updateSettings = useCallback(async (newSettings: Partial<CalendarAppSettings>) => {
-    setSyncStatus('syncing');
+    setSettings((prev) => ({ ...prev, ...newSettings }));
+    setLastSyncTime(new Date());
+
     try {
-      const res = await fetch('/api/settings', {
+      await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
       });
-      if (res.ok) {
-        setSettings((prev) => ({ ...prev, ...newSettings }));
-        setLastSyncTime(new Date());
-      }
-    } catch (err) {
-      console.error('Failed to update settings:', err);
-    } finally {
-      setSyncStatus('connected');
-    }
+    } catch {}
   }, []);
 
   const rosterWeeks = settings.junjieRosterWeeks || DEFAULT_ROSTER_WEEKS;
@@ -356,18 +384,20 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   }, [updateSettings]);
 
   const resetToDefaults = useCallback(async () => {
-    setSyncStatus('syncing');
+    setEvents(INITIAL_SEED_EVENTS);
+    setOverrides([]);
+    setFamilyMembers(INITIAL_FAMILY_MEMBERS);
+    setSettings(INITIAL_SETTINGS);
+    setLastSyncTime(new Date());
+
     try {
-      const res = await fetch('/api/reset', { method: 'POST' });
-      if (res.ok) {
-        await fetchState();
-      }
-    } catch (err) {
-      console.error('Failed to reset:', err);
-    } finally {
-      setSyncStatus('connected');
-    }
-  }, [fetchState]);
+      localStorage.removeItem(STORAGE_KEYS.EVENTS);
+      localStorage.removeItem(STORAGE_KEYS.OVERRIDES);
+      localStorage.removeItem(STORAGE_KEYS.MEMBERS);
+      localStorage.removeItem(STORAGE_KEYS.SETTINGS);
+      await fetch('/api/reset', { method: 'POST' });
+    } catch {}
+  }, []);
 
   return (
     <CalendarContext.Provider

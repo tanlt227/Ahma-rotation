@@ -217,7 +217,7 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'bg-teal-50 text-teal-900 hover:bg-teal-100 border border-teal-300'
               }`}
             >
-              👵 7 May 2026 ({language === 'zh' ? '家超' : 'KC'})
+              👵 7 May 2026 ({language === 'zh' ? '启超' : 'KC'})
             </button>
             <button
               onClick={() => handleJumpToDate('2026-06-15')}
