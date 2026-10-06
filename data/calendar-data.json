@@ -1,0 +1,106 @@
+{
+  "events": [
+    {
+      "id": "seed-event-1",
+      "title": "Family Gathering Dinner @ Kay Cheow",
+      "startDate": "2026-05-10",
+      "category": "family_gathering",
+      "memberId": "all",
+      "time": "18:30",
+      "location": "Kay Cheow",
+      "notes": "Mother’s Day family dinner celebration with Ahma",
+      "createdAt": "2026-05-01T00:00:00.000Z",
+      "updatedAt": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "id": "seed-event-2",
+      "title": "Ahma Polyclinic Routine Check-up",
+      "startDate": "2026-05-22",
+      "category": "medical",
+      "memberId": "grandma",
+      "time": "09:30",
+      "location": "Polyclinic near Kay Guan",
+      "notes": "Blood pressure & medication top-up check",
+      "createdAt": "2026-05-01T00:00:00.000Z",
+      "updatedAt": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "id": "seed-event-3",
+      "title": "June Family Staycation / Holiday",
+      "startDate": "2026-06-20",
+      "endDate": "2026-06-22",
+      "category": "holiday_plan",
+      "memberId": "all",
+      "location": "Sentosa Resort",
+      "notes": "Weekend family getaway during school holidays",
+      "createdAt": "2026-05-01T00:00:00.000Z",
+      "updatedAt": "2026-05-01T00:00:00.000Z"
+    }
+  ],
+  "overrides": [],
+  "familyMembers": [
+    {
+      "id": "all",
+      "name": "Whole Family",
+      "relationship": "Family",
+      "color": "#10b981"
+    },
+    {
+      "id": "grandma",
+      "name": "Grandmother (阿嬷)",
+      "relationship": "Elder",
+      "color": "#0d9488"
+    },
+    {
+      "id": "junjie",
+      "name": "Jun Jie",
+      "relationship": "Son / Brother",
+      "color": "#8b5cf6"
+    },
+    {
+      "id": "layting",
+      "name": "Lay Ting",
+      "relationship": "Daughter / Sister",
+      "color": "#f43f5e"
+    },
+    {
+      "name": "Kay Cheow",
+      "relationship": "Father",
+      "color": "#3b82f6",
+      "id": "member-1791269197947-vh2u"
+    },
+    {
+      "name": "Hwee Leng",
+      "relationship": "Mother",
+      "color": "#3b82f6",
+      "id": "member-1791269205804-ea64"
+    }
+  ],
+  "settings": {
+    "grandmaAnchorDate": "2026-05-07",
+    "grandmaCycleDays": 14,
+    "grandmaSequence": [
+      "KC",
+      "KG",
+      "KB"
+    ],
+    "grandmaLocations": {
+      "KC": {
+        "name": "Kay Cheow",
+        "notes": "Kay Cheow (KC)"
+      },
+      "KG": {
+        "name": "Kay Guan",
+        "notes": "Kay Guan (KG)"
+      },
+      "KB": {
+        "name": "Kay Boon",
+        "notes": "Kay Boon (KB)"
+      }
+    },
+    "junjieAnchorDate": "2026-06-15",
+    "junjieCycleWeeks": 3
+  },
+  "lastUpdated": "2026-10-06T06:46:45.804Z",
+  "version": 5
+}
