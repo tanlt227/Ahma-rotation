@@ -33,6 +33,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 Key facts:
 - Elder: Ahma (阿嬷) rotates between Kay Cheow (启超/KC) -> Kay Guan (启源/KG) -> Kay Boon (启文/KB), default 14 days per house.
 - Fortnightly cycle anchor: 7 May 2026 starts at Kay Cheow (启超).
+- Special Arrangement for Chinese New Year (CNY):
+  * From CNY Eve (5:00 PM) until CNY Day 2 (8:00 PM)
+  * Rotation: 2026: Kay Guan (启源/KG), 2027: Kay Boon (启文/KB), 2028: Kay Cheow (启超/KC), 2029: Kay Guan (启源/KG), repeating order.
 - Jun Jie (俊杰): Police / shift worker on a 3-week repeating roster.
 - Roster details:
   * Week 1: Mon (Night 2200-0900), Tue (Night 2200-0900), Wed (OFF), Thu (REST), Fri (Morning 0630-1530), Sat (Morning 0630-1530), Sun (Morning 0630-1530)

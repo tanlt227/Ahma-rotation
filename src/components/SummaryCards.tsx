@@ -40,7 +40,11 @@ export const SummaryCards: React.FC = () => {
                 <span className="text-xs font-black uppercase tracking-wider text-teal-800">
                   {t.ahmaCurrentRotation}
                 </span>
-                {grandmaInfo.isOverridden ? (
+                {grandmaInfo.cnyArrangement ? (
+                  <span className="text-3xs font-black uppercase bg-rose-600 text-white px-2 py-0.5 rounded-full shadow-2xs">
+                    {language === 'zh' ? '🧧 农历新年特殊轮流' : '🧧 CNY Special Arrangement'}
+                  </span>
+                ) : grandmaInfo.isOverridden ? (
                   <span className="text-3xs font-extrabold uppercase bg-amber-100 text-amber-900 px-2 py-0.5 rounded border border-amber-300">
                     {language === 'zh' ? '特殊安排' : 'Special Arrangement'}
                   </span>

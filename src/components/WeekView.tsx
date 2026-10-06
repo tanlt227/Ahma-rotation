@@ -194,17 +194,37 @@ export const WeekView: React.FC<WeekViewProps> = ({
                   {/* Ahma Rotation: Bold black name, lighter background, NO dates beside name */}
                   {grandma && (
                     <div
-                      className={`mt-2 p-2.5 rounded-xl border-2 text-xs ${getAhmaLocationBgClass(grandma.locationCode)}`}
+                      className={`mt-2 p-2.5 rounded-xl border-2 text-xs ${
+                        grandma.cnyArrangement
+                          ? 'bg-[#ffebee] border-rose-400 text-rose-950 ring-1 ring-rose-400/50'
+                          : getAhmaLocationBgClass(grandma.locationCode)
+                      }`}
                     >
                       <div className="flex items-center justify-between font-bold text-black">
                         <span className="flex items-center gap-1">
-                          <Heart className="w-3.5 h-3.5 fill-current text-teal-600" />
+                          {grandma.cnyArrangement ? (
+                            <span className="text-sm">🧧</span>
+                          ) : (
+                            <Heart className="w-3.5 h-3.5 fill-current text-teal-600" />
+                          )}
                           <span>{language === 'zh' ? '阿嬷' : 'Ahma'}</span>
                         </span>
+                        {grandma.cnyArrangement && (
+                          <span className="text-3xs font-black bg-rose-200 text-rose-950 px-1.5 py-0.2 rounded-full border border-rose-300">
+                            {language === 'zh'
+                              ? grandma.cnyArrangement.stageLabelZh
+                              : grandma.cnyArrangement.stageLabel}
+                          </span>
+                        )}
                       </div>
                       <div className="font-bold text-sm mt-0.5 text-black">
                         {ahmaName}
                       </div>
+                      {grandma.cnyArrangement && (
+                        <div className="text-3xs font-medium text-rose-800 mt-1">
+                          ⏰ {language === 'zh' ? grandma.cnyArrangement.timeWindowZh : grandma.cnyArrangement.timeWindow}
+                        </div>
+                      )}
                     </div>
                   )}
 

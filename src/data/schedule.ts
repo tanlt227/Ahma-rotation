@@ -388,6 +388,88 @@ export function getScheduledJunjieShift(
 }
 
 /**
+ * CNY Special Arrangement:
+ * On CNY eve (5pm) till CNY day 2 (8pm):
+ * 2026: Kay Guan (KG)
+ * 2027: Kay Boon (KB)
+ * 2028: Kay Cheow (KC)
+ * 2029: Kay Guan (KG)
+ * Repeats in sequence: KG -> KB -> KC -> KG...
+ */
+export const CNY_SCHEDULE_CONFIG: Record<
+  number,
+  { eve: string; day1: string; day2: string; locationCode: string }
+> = {
+  2026: { eve: '2026-02-16', day1: '2026-02-17', day2: '2026-02-18', locationCode: 'KG' },
+  2027: { eve: '2027-02-05', day1: '2027-02-06', day2: '2027-02-07', locationCode: 'KB' },
+  2028: { eve: '2028-01-25', day1: '2028-01-26', day2: '2028-01-27', locationCode: 'KC' },
+  2029: { eve: '2029-02-12', day1: '2029-02-13', day2: '2029-02-14', locationCode: 'KG' },
+  2030: { eve: '2030-02-02', day1: '2030-02-03', day2: '2030-02-04', locationCode: 'KB' },
+  2031: { eve: '2031-01-22', day1: '2031-01-23', day2: '2031-01-24', locationCode: 'KC' },
+  2032: { eve: '2032-02-10', day1: '2032-02-11', day2: '2032-02-12', locationCode: 'KG' },
+  2033: { eve: '2033-01-30', day1: '2033-01-31', day2: '2033-02-01', locationCode: 'KB' },
+  2034: { eve: '2034-02-18', day1: '2034-02-19', day2: '2034-02-20', locationCode: 'KC' },
+  2035: { eve: '2035-02-07', day1: '2035-02-08', day2: '2035-02-09', locationCode: 'KG' },
+};
+
+export interface CnyArrangementInfo {
+  year: number;
+  stage: 'eve' | 'day1' | 'day2';
+  stageLabel: string;
+  stageLabelZh: string;
+  timeWindow: string;
+  timeWindowZh: string;
+  locationCode: string;
+  locationName: string;
+}
+
+export function getCnyArrangement(dateStr: string): CnyArrangementInfo | null {
+  const [yStr] = dateStr.split('-');
+  const year = parseInt(yStr, 10);
+  const cny = CNY_SCHEDULE_CONFIG[year];
+  if (!cny) return null;
+
+  if (dateStr === cny.eve) {
+    return {
+      year,
+      stage: 'eve',
+      stageLabel: 'CNY Eve',
+      stageLabelZh: '除夕夜 (5pm起)',
+      timeWindow: 'From 5:00 PM',
+      timeWindowZh: '下午 5:00 开始',
+      locationCode: cny.locationCode,
+      locationName: cny.locationCode === 'KG' ? 'Kay Guan' : cny.locationCode === 'KB' ? 'Kay Boon' : 'Kay Cheow',
+    };
+  }
+  if (dateStr === cny.day1) {
+    return {
+      year,
+      stage: 'day1',
+      stageLabel: 'CNY Day 1',
+      stageLabelZh: '大年初一',
+      timeWindow: 'Full Day',
+      timeWindowZh: '全天',
+      locationCode: cny.locationCode,
+      locationName: cny.locationCode === 'KG' ? 'Kay Guan' : cny.locationCode === 'KB' ? 'Kay Boon' : 'Kay Cheow',
+    };
+  }
+  if (dateStr === cny.day2) {
+    return {
+      year,
+      stage: 'day2',
+      stageLabel: 'CNY Day 2',
+      stageLabelZh: '大年初二 (至8pm)',
+      timeWindow: 'Until 8:00 PM',
+      timeWindowZh: '至晚上 8:00',
+      locationCode: cny.locationCode,
+      locationName: cny.locationCode === 'KG' ? 'Kay Guan' : cny.locationCode === 'KB' ? 'Kay Boon' : 'Kay Cheow',
+    };
+  }
+
+  return null;
+}
+
+/**
  * Get Ahma's location for any date
  */
 export function getGrandmaLocation(
@@ -405,13 +487,16 @@ export function getGrandmaLocation(
   nextMoveDate: string;
   isOverridden: boolean;
   overrideReason?: string;
+  cnyArrangement?: CnyArrangementInfo;
   stayStartDate: string;
   stayEndDate: string;
   formattedStayRange: string;
 } {
   const stayDuration = Math.max(1, cycleDays);
   const fortnight = getGrandmaFortnightRange(dateStr, anchorDate, stayDuration);
+  const cny = getCnyArrangement(dateStr);
 
+  // 1. Explicit user manual override takes highest precedence
   if (overrides) {
     const override = overrides.find(
       (o) => o.date === dateStr && o.type === 'grandma_location'
@@ -437,11 +522,42 @@ export function getGrandmaLocation(
         nextMoveDate: '',
         isOverridden: true,
         overrideReason: override.grandmaReason,
+        cnyArrangement: cny || undefined,
         stayStartDate: fortnight.stayStartDate,
         stayEndDate: fortnight.stayEndDate,
         formattedStayRange: fortnight.formattedStayRange,
       };
     }
+  }
+
+  // 2. CNY Special Arrangement rule: CNY Eve (5pm) till CNY Day 2 (8pm)
+  if (cny) {
+    const locCode = cny.locationCode;
+    const meta = GRANDMA_LOCATIONS_META[locCode] || {
+      code: locCode,
+      name: locCode === 'KC' ? 'Kay Cheow' : locCode === 'KG' ? 'Kay Guan' : locCode === 'KB' ? 'Kay Boon' : locCode,
+      description: `CNY Special: ${cny.locationName}`,
+      bgColor: getAhmaLocationBgClass(locCode),
+      textColor: 'text-black',
+      borderColor: 'border-red-400',
+      dotColor: 'bg-red-600',
+    };
+
+    return {
+      locationCode: locCode,
+      meta,
+      dayInCurrentStay: cny.stage === 'eve' ? 1 : cny.stage === 'day1' ? 2 : 3,
+      daysRemainingInStay: cny.stage === 'day2' ? 0 : 3 - (cny.stage === 'eve' ? 1 : 2),
+      stayDuration: 3,
+      nextLocationCode: 'Regular Rotation',
+      nextMoveDate: addDays(dateStr, cny.stage === 'day2' ? 1 : cny.stage === 'day1' ? 2 : 3),
+      isOverridden: true,
+      overrideReason: `🧧 CNY Special Arrangement (${cny.stageLabel}: ${cny.timeWindow}) @ ${cny.locationName}`,
+      cnyArrangement: cny,
+      stayStartDate: fortnight.stayStartDate,
+      stayEndDate: fortnight.stayEndDate,
+      formattedStayRange: fortnight.formattedStayRange,
+    };
   }
 
   const diff = daysBetween(dateStr, anchorDate);

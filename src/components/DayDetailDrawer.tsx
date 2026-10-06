@@ -110,13 +110,35 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
             )}
 
             {/* 2. Ahma's Location Details */}
-            <div className="p-3.5 sm:p-4 rounded-xl border border-teal-200 bg-teal-50/50">
+            <div
+              className={`p-3.5 sm:p-4 rounded-xl border ${
+                grandma.cnyArrangement
+                  ? 'border-rose-300 bg-rose-50/70 ring-1 ring-rose-400/40'
+                  : 'border-teal-200 bg-teal-50/50'
+              }`}
+            >
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-black text-teal-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <Heart className="w-3.5 h-3.5 fill-current text-teal-600" />
-                  <span>Ahma's Rotation</span>
+                  {grandma.cnyArrangement ? (
+                    <span className="text-sm">🧧</span>
+                  ) : (
+                    <Heart className="w-3.5 h-3.5 fill-current text-teal-600" />
+                  )}
+                  <span>
+                    {grandma.cnyArrangement
+                      ? language === 'zh'
+                        ? '农历新年特殊轮流安排'
+                        : 'CNY Special Arrangement'
+                      : "Ahma's Rotation"}
+                  </span>
                 </span>
-                {grandma.isOverridden ? (
+                {grandma.cnyArrangement ? (
+                  <span className="text-3xs font-black uppercase bg-rose-600 text-white px-2 py-0.5 rounded-full shadow-2xs">
+                    {language === 'zh'
+                      ? grandma.cnyArrangement.stageLabelZh
+                      : grandma.cnyArrangement.stageLabel}
+                  </span>
+                ) : grandma.isOverridden ? (
                   <span className="text-3xs font-black uppercase bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded border border-amber-300">
                     Arrangement
                   </span>
@@ -136,13 +158,36 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                 </span>
               </div>
 
+              {grandma.cnyArrangement && (
+                <div className="mt-2 p-2.5 bg-white rounded-lg text-xs border border-rose-200 text-rose-950">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <span>🧧</span>
+                    <span>
+                      {language === 'zh'
+                        ? `${grandma.cnyArrangement.year}年 农历新年安排`
+                        : `${grandma.cnyArrangement.year} CNY Arrangement`}
+                    </span>
+                  </div>
+                  <div className="text-3xs text-rose-800 mt-1">
+                    {language === 'zh'
+                      ? `除夕 (5pm起) 至 初二 (8pm) 在 ${currentAhmaName} (${grandma.locationCode})`
+                      : `CNY Eve (5pm) till CNY Day 2 (8pm) @ ${currentAhmaName} (${grandma.locationCode})`}
+                  </div>
+                  <div className="text-3xs text-zinc-600 mt-0.5 font-medium">
+                    {language === 'zh'
+                      ? `当日时间段：${grandma.cnyArrangement.timeWindowZh}`
+                      : `Time window today: ${grandma.cnyArrangement.timeWindow}`}
+                  </div>
+                </div>
+              )}
+
               {/* Stay Start and End Dates */}
-              <div className="mt-1 text-xs text-teal-800 flex items-center gap-1">
+              <div className="mt-2 text-xs text-teal-800 flex items-center gap-1">
                 <span className="font-medium text-teal-600">Fortnight stay period:</span>
                 <span className="font-bold">{grandma.formattedStayRange}</span>
               </div>
 
-              {grandma.overrideReason && (
+              {grandma.overrideReason && !grandma.cnyArrangement && (
                 <div className="mt-2 p-2 bg-amber-50 rounded-lg text-xs text-amber-900 border border-amber-200">
                   <strong>Arrangement details:</strong> {grandma.overrideReason}
                 </div>

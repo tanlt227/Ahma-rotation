@@ -219,11 +219,30 @@ export const MonthView: React.FC<MonthViewProps> = ({
                 <div className="mt-2.5 space-y-2 text-xs">
                   {/* Ahma - Bold black, lighter background, no dates beside name */}
                   {grandma && (
-                    <div className={`flex items-center justify-between p-2 rounded-xl border ${getAhmaLocationBgClass(grandma.locationCode)}`}>
+                    <div
+                      className={`flex items-center justify-between p-2 rounded-xl border ${
+                        grandma.cnyArrangement
+                          ? 'bg-[#ffebee] border-rose-400 text-rose-950 ring-1 ring-rose-400/50'
+                          : getAhmaLocationBgClass(grandma.locationCode)
+                      }`}
+                    >
                       <span className="flex items-center gap-1.5 font-bold text-black">
-                        <Heart className="w-3.5 h-3.5 fill-current text-teal-600 shrink-0" />
-                        <span>{language === 'zh' ? '阿嬷:' : 'Ahma:'} {getAhmaDisplayName(grandma.locationCode)}</span>
+                        {grandma.cnyArrangement ? (
+                          <span className="text-sm">🧧</span>
+                        ) : (
+                          <Heart className="w-3.5 h-3.5 fill-current text-teal-600 shrink-0" />
+                        )}
+                        <span>
+                          {language === 'zh' ? '阿嬷:' : 'Ahma:'} {getAhmaDisplayName(grandma.locationCode)}
+                        </span>
                       </span>
+                      {grandma.cnyArrangement && (
+                        <span className="text-3xs font-black bg-rose-200 text-rose-950 px-2 py-0.5 rounded-full border border-rose-300">
+                          {language === 'zh'
+                            ? grandma.cnyArrangement.stageLabelZh
+                            : `${grandma.cnyArrangement.stageLabel} (${grandma.cnyArrangement.timeWindow})`}
+                        </span>
+                      )}
                     </div>
                   )}
 
@@ -376,14 +395,28 @@ export const MonthView: React.FC<MonthViewProps> = ({
                         {/* 2. Ahma Rotation: Bold black name, lighter background, NO dates or location codes beside name */}
                         {grandma && (filterMemberId === 'all' || filterMemberId === 'grandma') && (
                           <div
-                            className={`text-3xs sm:text-2xs px-1.5 py-0.5 rounded-md border truncate shadow-2xs ${getAhmaLocationBgClass(grandma.locationCode)}`}
-                            title={`Ahma: ${ahmaName}`}
+                            className={`text-3xs sm:text-2xs px-1.5 py-0.5 rounded-md border truncate shadow-2xs ${
+                              grandma.cnyArrangement
+                                ? 'bg-[#ffebee] border-rose-400 text-rose-950 font-black ring-1 ring-rose-400/50'
+                                : getAhmaLocationBgClass(grandma.locationCode)
+                            }`}
+                            title={
+                              grandma.cnyArrangement
+                                ? `CNY Special (${grandma.cnyArrangement.stageLabel}: ${grandma.cnyArrangement.timeWindow}) @ ${ahmaName}`
+                                : `Ahma: ${ahmaName}`
+                            }
                           >
                             <span className="truncate flex items-center gap-1 font-bold text-black">
-                              <Heart className="w-2.5 h-2.5 fill-current shrink-0 text-teal-600 hidden sm:inline" />
+                              {grandma.cnyArrangement ? (
+                                <span className="text-3xs shrink-0">🧧</span>
+                              ) : (
+                                <Heart className="w-2.5 h-2.5 fill-current shrink-0 text-teal-600 hidden sm:inline" />
+                              )}
                               <span className="truncate">
-                                {grandma.isOverridden ? '⚡ ' : ''}
-                                <span>{ahmaName}</span>
+                                {grandma.isOverridden && !grandma.cnyArrangement ? '⚡ ' : ''}
+                                <span className={grandma.cnyArrangement ? 'font-black text-rose-950' : ''}>
+                                  {ahmaName}
+                                </span>
                               </span>
                             </span>
                           </div>

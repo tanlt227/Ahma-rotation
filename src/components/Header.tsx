@@ -210,6 +210,17 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-zinc-500 text-2xs font-bold uppercase mr-0.5 hidden xs:inline">{t.jump}</span>
             <button
+              onClick={() => handleJumpToDate('2026-02-16')}
+              className={`px-2 py-0.5 rounded-md text-2xs sm:text-xs font-bold transition-all shrink-0 ${
+                selectedDate === '2026-02-16' || selectedDate === '2026-02-17' || selectedDate === '2026-02-18'
+                  ? 'bg-rose-700 text-white shadow-xs'
+                  : 'bg-rose-50 text-rose-900 hover:bg-rose-100 border border-rose-300'
+              }`}
+              title="2026 CNY Eve - Day 2: Kay Guan (启源)"
+            >
+              🧧 2026 CNY ({language === 'zh' ? '启源' : 'KG'})
+            </button>
+            <button
               onClick={() => handleJumpToDate('2026-05-07')}
               className={`px-2 py-0.5 rounded-md text-2xs sm:text-xs font-bold transition-all shrink-0 ${
                 selectedDate === '2026-05-07'
