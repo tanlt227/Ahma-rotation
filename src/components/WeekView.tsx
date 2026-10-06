@@ -203,7 +203,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         </span>
                       </div>
                       <div className="font-bold text-sm mt-0.5 text-black">
-                        {ahmaName} ({grandma.locationCode})
+                        {ahmaName}
                       </div>
                     </div>
                   )}

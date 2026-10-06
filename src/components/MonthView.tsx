@@ -222,7 +222,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     <div className={`flex items-center justify-between p-2 rounded-xl border ${getAhmaLocationBgClass(grandma.locationCode)}`}>
                       <span className="flex items-center gap-1.5 font-bold text-black">
                         <Heart className="w-3.5 h-3.5 fill-current text-teal-600 shrink-0" />
-                        <span>{language === 'zh' ? '阿嬷:' : 'Ahma:'} {getAhmaDisplayName(grandma.locationCode)} ({grandma.locationCode})</span>
+                        <span>{language === 'zh' ? '阿嬷:' : 'Ahma:'} {getAhmaDisplayName(grandma.locationCode)}</span>
                       </span>
                     </div>
                   )}
@@ -373,18 +373,17 @@ export const MonthView: React.FC<MonthViewProps> = ({
                           </div>
                         )}
 
-                        {/* 2. Ahma Rotation: Bold black name, lighter background, NO dates beside name */}
+                        {/* 2. Ahma Rotation: Bold black name, lighter background, NO dates or location codes beside name */}
                         {grandma && (filterMemberId === 'all' || filterMemberId === 'grandma') && (
                           <div
                             className={`text-3xs sm:text-2xs px-1.5 py-0.5 rounded-md border truncate shadow-2xs ${getAhmaLocationBgClass(grandma.locationCode)}`}
-                            title={`Ahma: ${ahmaName} (${grandma.locationCode})`}
+                            title={`Ahma: ${ahmaName}`}
                           >
                             <span className="truncate flex items-center gap-1 font-bold text-black">
                               <Heart className="w-2.5 h-2.5 fill-current shrink-0 text-teal-600 hidden sm:inline" />
                               <span className="truncate">
                                 {grandma.isOverridden ? '⚡ ' : ''}
-                                <span className="sm:hidden">{grandma.locationCode}</span>
-                                <span className="hidden sm:inline">{ahmaName} ({grandma.locationCode})</span>
+                                <span>{ahmaName}</span>
                               </span>
                             </span>
                           </div>
