@@ -1,0 +1,6 @@
+{
+  "name": "FamilySync SG Calendar",
+  "description": "Real-time collaborative family calendar with Singapore public holidays, Grandmother's KC-KG-KB location rotation, and Jun Jie's repeating shift schedule.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
