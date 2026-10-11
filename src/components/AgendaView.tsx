@@ -9,7 +9,7 @@ import {
   getAhmaLocationBgClass,
 } from '../data/schedule';
 import { getPublicHoliday, getHolidayName } from '../data/holidays';
-import { getShiftLabel } from '../data/i18n';
+import { getShiftLabel, getCategoryLabel } from '../data/i18n';
 import {
   Calendar,
   Heart,
@@ -212,7 +212,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
                   {/* Jun Jie Shift */}
                   <div className={`px-2 py-0.5 rounded-md border ${getShiftColorClass(item.junjie.shift.code)}`}>
-                    <span className="font-bold text-black">{language === 'zh' ? '俊杰:' : 'Jun Jie:'} {getShiftLabel(item.junjie.shift.name, item.junjie.shift.time ?? '', language)}</span>
+                    <span className="font-bold text-black">{language === 'zh' ? '俊杰:' : 'Jun Jie:'} {getShiftLabel(item.junjie.shift.name, '', language)}</span>
                     {item.junjie.shift.time && item.junjie.shift.time !== 'Off' && item.junjie.shift.time !== 'Rest' && item.junjie.shift.time !== 'Leave' && (
                       <span className="text-3xs ml-1 font-normal text-black bg-white/50 px-1 py-0.2 rounded border border-black/10">
                         {item.junjie.shift.time}
@@ -227,7 +227,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                       className="px-2 py-0.5 rounded-md font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1"
                     >
                       <Sparkles className="w-3 h-3 text-amber-600" />
-                      <span>Arrangement: {ovr.shiftReason || ovr.grandmaReason || 'Custom'}</span>
+                      <span>{language === 'zh' ? '特殊安排: ' : 'Arrangement: '}{ovr.shiftReason || ovr.grandmaReason || 'Custom'}</span>
                     </div>
                   ))}
 
@@ -237,7 +237,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                       key={ev.id}
                       className="px-2 py-0.5 rounded-md font-semibold bg-blue-50 text-blue-900 border border-blue-200 flex items-center gap-1"
                     >
-                      <Plane className="w-3 h-3 text-blue-600" />
+                      <span className="shrink-0">{getCategoryLabel(ev.category, language).split(' ')[0]}</span>
                       <span>{ev.title}</span>
                     </div>
                   ))}

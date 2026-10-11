@@ -137,3 +137,24 @@ export function getShiftLabel(name: string, time: string, lang: Language): strin
   if (!time || time === 'Off' || time === 'Rest' || time === 'Leave') return n;
   return `${n} (${time})`;
 }
+
+// ---------------------------------------------------------------------------
+// Event category labels
+// ---------------------------------------------------------------------------
+export type EventCategory = 'holiday_plan' | 'family_gathering' | 'medical' | 'leave' | 'unusual_arrangement' | 'general';
+
+export const CATEGORY_LABELS: Record<EventCategory, { en: string; zh: string; icon: string }> = {
+  holiday_plan:        { en: 'Holiday / Vacation',   zh: '旅行 / 假期',   icon: '✈️' },
+  family_gathering:    { en: 'Family Gathering',      zh: '家庭聚会',      icon: '🍲' },
+  medical:             { en: 'Medical',               zh: '医疗 / 复诊',   icon: '🏥' },
+  leave:               { en: 'Leave / Rest',          zh: '休假',          icon: '🏖️' },
+  unusual_arrangement: { en: 'Unusual Arrangement',  zh: '特殊安排',       icon: '⚡' },
+  general:             { en: 'General',               zh: '一般备注',      icon: '📌' },
+};
+
+/** Returns localised category label with icon, e.g. "✈️ 旅行 / 假期" */
+export function getCategoryLabel(category: string, lang: Language): string {
+  const cat = CATEGORY_LABELS[category as EventCategory];
+  if (!cat) return category;
+  return `${cat.icon} ${lang === 'zh' ? cat.zh : cat.en}`;
+}

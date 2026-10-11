@@ -5,8 +5,7 @@ import {
   DEFAULT_ROSTER_WEEKS,
 } from '../data/schedule';
 import { ShiftCode, ShiftRosterWeek, ShiftRosterDay } from '../types';
-import { translations } from '../data/i18n';
-import { getShiftLabel } from '../data/i18n';
+import { translations, getShiftName } from '../data/i18n';
 import {
   Clock,
   Plus,
@@ -245,7 +244,7 @@ export const ShiftMatrixView: React.FC<ShiftMatrixViewProps> = ({ onOpenOverride
                         title="Click to edit shift"
                       >
                         <div className="font-black text-xs sm:text-sm tracking-tight">
-                          {getShiftLabel(day.name, '', language)}
+                          {getShiftName(day.name, language)}
                         </div>
                         {day.time && day.time !== 'Off' && day.time !== 'Rest' && day.time !== 'Leave' ? (
                           <div className="text-3xs font-extrabold opacity-95 mt-0.5">
@@ -306,8 +305,8 @@ export const ShiftMatrixView: React.FC<ShiftMatrixViewProps> = ({ onOpenOverride
                 >
                   <option value="NIGHT">{language === 'zh' ? '晚班 Night (2200-0900)' : 'Night (2200-0900)'}</option>
                   <option value="MORNING">{language === 'zh' ? '早班 Morning (0630-1530)' : 'Morning (0630-1530)'}</option>
-                  <option value="AFTERNOON_1">{language === 'zh' ? '午1班 Afternoon 1 (1400-0200)' : 'Afternoon 1 (1400-0200)'}</option>
-                  <option value="AFTERNOON_2">{language === 'zh' ? '午2班 Afternoon 2 (1500-0100)' : 'Afternoon 2 (1500-0100)'}</option>
+                  <option value="AFTERNOON_1">{language === 'zh' ? '午1班 Afternoon 1 (1400-0100)' : 'Afternoon 1 (1400-0100)'}</option>
+                  <option value="AFTERNOON_2">{language === 'zh' ? '午2班 Afternoon 2 (1500-0200)' : 'Afternoon 2 (1500-0200)'}</option>
                   <option value="AFTERNOON_3">{language === 'zh' ? '午3班 Afternoon 3 (1600-0100)' : 'Afternoon 3 (1600-0100)'}</option>
                   <option value="OFF">{language === 'zh' ? '休息 OFF Day' : 'OFF Day'}</option>
                   <option value="REST">{language === 'zh' ? '休息 REST DAY' : 'REST DAY'}</option>

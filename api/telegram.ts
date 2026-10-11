@@ -24,10 +24,10 @@ const JUNJIE_ROSTER: { name: string; time: string }[] = [
   // Week 2
   { name: 'Morning', time: '0630-1530' },       // Mon
   { name: 'OFF Day', time: '' },                // Tue
-  { name: 'Afternoon 1', time: '1400-0200' },   // Wed
-  { name: 'Afternoon 1', time: '1400-0200' },   // Thu
-  { name: 'Afternoon 2', time: '1500-0100' },   // Fri
-  { name: 'Afternoon 2', time: '1500-0100' },   // Sat
+  { name: 'Afternoon 1', time: '1400-0100' },   // Wed
+  { name: 'Afternoon 1', time: '1400-0100' },   // Thu
+  { name: 'Afternoon 2', time: '1500-0200' },   // Fri
+  { name: 'Afternoon 2', time: '1500-0200' },   // Sat
   { name: 'REST DAY', time: '' },               // Sun
   // Week 3
   { name: 'OFF Day', time: '' },                // Mon

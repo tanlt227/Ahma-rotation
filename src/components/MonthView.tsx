@@ -9,7 +9,7 @@ import {
   getAhmaLocationBgClass,
 } from '../data/schedule';
 import { getPublicHoliday, getHolidayName } from '../data/holidays';
-import { translations, getShiftLabel } from '../data/i18n';
+import { translations, getShiftLabel, getCategoryLabel } from '../data/i18n';
 import {
   Plus,
   Sparkles,
@@ -251,7 +251,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     <div className={`p-2 rounded-xl border ${getShiftColorClass(junjie.shift.code)}`}>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-bold text-black">
-                          {language === 'zh' ? '俊杰:' : 'Jun Jie:'} {getShiftLabel(junjie.shift.name, junjie.shift.time ?? '', language)}
+                          {language === 'zh' ? '俊杰:' : 'Jun Jie:'} {getShiftLabel(junjie.shift.name, '', language)}
                         </span>
                         {junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave' && (
                           <span className="text-xs font-normal text-black bg-white/60 px-2 py-0.5 rounded border border-black/10">
@@ -268,8 +268,11 @@ export const MonthView: React.FC<MonthViewProps> = ({
                       key={ev.id}
                       className="p-2 rounded-xl bg-zinc-50 border border-zinc-200 text-zinc-900 font-bold flex items-center justify-between"
                     >
-                      <span className="truncate">{ev.title}</span>
-                      {ev.time && <span className="text-3xs text-zinc-500 font-medium">{ev.time}</span>}
+                      <span className="flex items-center gap-1 truncate">
+                        <span className="shrink-0">{getCategoryLabel(ev.category, language).split(' ')[0]}</span>
+                        <span className="truncate">{ev.title}</span>
+                      </span>
+                      {ev.time && <span className="text-3xs text-zinc-500 font-medium shrink-0 ml-1">{ev.time}</span>}
                     </div>
                   ))}
                 </div>
@@ -431,7 +434,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                             <div className="flex items-center justify-between gap-1 leading-tight">
                               <span className="truncate font-bold text-black">
                                 {junjie.isOverridden ? '⚡ ' : ''}
-                                {getShiftLabel(junjie.shift.name, junjie.shift.time ?? '', language)}
+                                {getShiftLabel(junjie.shift.name, '', language)}
                               </span>
                               {junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave' && (
                                 <span className="font-normal text-black text-3xs shrink-0 whitespace-nowrap">
@@ -453,11 +456,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                             }`}
                             title={ev.title}
                           >
-                            {ev.category === 'holiday_plan' ? (
-                              <Plane className="w-2.5 h-2.5 shrink-0 text-blue-600 hidden xs:inline" />
-                            ) : (
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0 hidden xs:inline" />
-                            )}
+                            <span className="shrink-0 text-3xs">{getCategoryLabel(ev.category, language).split(' ')[0]}</span>
                             <span className="truncate">{ev.title}</span>
                           </div>
                         ))}

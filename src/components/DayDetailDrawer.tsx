@@ -2,7 +2,7 @@ import React from 'react';
 import { useCalendar } from '../context/CalendarContext';
 import { getGrandmaLocation, getScheduledJunjieShift, getAhmaLocationName, getShiftColorClass, getAhmaLocationBgClass } from '../data/schedule';
 import { getPublicHoliday, getHolidayName } from '../data/holidays';
-import { getShiftLabel } from '../data/i18n';
+import { getShiftLabel, getCategoryLabel } from '../data/i18n';
 import { CalendarEvent } from '../types';
 import {
   X,
@@ -233,7 +233,7 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 
               <div className="flex items-baseline gap-2.5">
                 <span className="text-xl font-bold text-black">
-                  {getShiftLabel(junjie.shift.name, junjie.shift.time ?? '', language)}
+                  {getShiftLabel(junjie.shift.name, '', language)}
                 </span>
               </div>
 
@@ -272,20 +272,20 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-xs font-black uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>Family Plans ({dayEvents.length})</span>
+                  <span>{language === 'zh' ? `家庭计划 (${dayEvents.length})` : `Family Plans (${dayEvents.length})`}</span>
                 </h4>
                 <button
                   onClick={() => onOpenEventModal(dateStr)}
                   className="text-xs font-black text-rose-600 hover:underline flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Plan</span>
+                  <span>{language === 'zh' ? '添加计划' : 'Add Plan'}</span>
                 </button>
               </div>
 
               {dayEvents.length === 0 ? (
                 <div className="p-3 rounded-xl border border-dashed border-zinc-200 text-center text-xs text-zinc-400">
-                  No custom events scheduled for this day.
+                  {language === 'zh' ? '今天没有自定义活动。' : 'No custom events scheduled for this day.'}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -298,19 +298,18 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                       >
                         <div>
                           <div className="flex items-center gap-1.5">
-                            {ev.category === 'holiday_plan' ? (
-                              <Plane className="w-3.5 h-3.5 text-blue-600" />
-                            ) : (
-                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            )}
+                            <span className="text-sm">{getCategoryLabel(ev.category, language).split(' ')[0]}</span>
                             <h5 className="font-bold text-sm text-zinc-900">{ev.title}</h5>
                           </div>
+                          <div className="text-2xs text-zinc-500 font-medium mt-0.5">
+                            {getCategoryLabel(ev.category, language).split(' ').slice(1).join(' ')}
+                          </div>
                           {ev.time && (
-                            <div className="text-xs text-zinc-500 mt-0.5">Time: {ev.time}</div>
+                            <div className="text-xs text-zinc-500 mt-0.5">{language === 'zh' ? '时间: ' : 'Time: '}{ev.time}</div>
                           )}
                           {member && (
                             <div className="text-xs font-medium text-zinc-600 mt-0.5">
-                              For: {member.name}
+                              {language === 'zh' ? '对象: ' : 'For: '}{member.name}
                             </div>
                           )}
                           {ev.notes && (
@@ -352,14 +351,14 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
             className="flex-1 py-2.5 rounded-xl font-bold text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-            <span>Unusual Arrangement</span>
+            <span>{language === 'zh' ? '特殊安排' : 'Unusual Arrangement'}</span>
           </button>
           <button
             onClick={() => onOpenEventModal(dateStr)}
             className="flex-1 py-2.5 rounded-xl font-bold text-xs bg-rose-600 hover:bg-rose-700 text-white transition-colors flex items-center justify-center gap-1.5 shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Plan</span>
+            <span>{language === 'zh' ? '添加计划' : 'Add Plan'}</span>
           </button>
         </div>
       </div>

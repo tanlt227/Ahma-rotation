@@ -9,7 +9,7 @@ import {
   getAhmaLocationBgClass,
 } from '../data/schedule';
 import { getPublicHoliday, getHolidayName } from '../data/holidays';
-import { translations, getShiftLabel } from '../data/i18n';
+import { translations, getShiftLabel, getCategoryLabel } from '../data/i18n';
 import {
   Heart,
   Clock,
@@ -179,7 +179,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         </span>
                       </div>
                       <div className="font-bold text-sm mt-0.5 text-black">
-                        {getShiftLabel(junjie.shift.name, junjie.shift.time ?? '', language)}
+                        {getShiftLabel(junjie.shift.name, '', language)}
                       </div>
                       {junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave' && (
                         <div className="text-xs font-normal text-black flex items-center gap-1 mt-0.5">
@@ -236,11 +236,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                           className="p-2 rounded-xl border border-zinc-200 bg-zinc-50 text-xs text-zinc-900 font-bold"
                         >
                           <div className="truncate flex items-center gap-1">
-                            {ev.category === 'holiday_plan' ? (
-                              <Plane className="w-3.5 h-3.5 text-blue-600" />
-                            ) : (
-                              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                            )}
+                            <span className="shrink-0">{getCategoryLabel(ev.category, language).split(' ')[0]}</span>
                             <span className="truncate">{ev.title}</span>
                           </div>
                           {ev.time && (
