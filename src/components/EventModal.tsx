@@ -45,14 +45,21 @@ export const EventModal: React.FC<EventModalProps> = ({
 
   useEffect(() => {
     if (editingEvent) {
-      setTitle(editingEvent.title);
+      // Show the title in the current language if translated, else original
+      const displayTitle = language === 'zh'
+        ? (editingEvent.titleZh || editingEvent.title)
+        : (editingEvent.titleEn || editingEvent.title);
+      setTitle(displayTitle);
       setStartDate(editingEvent.startDate);
       setEndDate(editingEvent.endDate || '');
       setCategory(editingEvent.category);
       setMemberId(editingEvent.memberId || 'all');
       setTime(editingEvent.time || '');
       setLocation(editingEvent.location || '');
-      setNotes(editingEvent.notes || '');
+      const displayNotes = language === 'zh'
+        ? (editingEvent.notesZh || editingEvent.notes || '')
+        : (editingEvent.notesEn || editingEvent.notes || '');
+      setNotes(displayNotes);
     } else {
       setTitle('');
       setStartDate(targetDate);
@@ -71,7 +78,8 @@ export const EventModal: React.FC<EventModalProps> = ({
     e.preventDefault();
     if (!title.trim() || !startDate) return;
 
-    await addOrUpdateEvent({
+    // Build base event first so it saves instantly (optimistic)
+    const baseEvent: Partial<typeof editingEvent & { titleEn?: string; titleZh?: string; notesEn?: string; notesZh?: string }> = {
       id: editingEvent?.id,
       title: title.trim(),
       startDate,
@@ -81,8 +89,32 @@ export const EventModal: React.FC<EventModalProps> = ({
       time: time.trim() || undefined,
       location: location.trim() || undefined,
       notes: notes.trim() || undefined,
-    });
+    };
+
+    // Save immediately — don't block on translation
+    await addOrUpdateEvent(baseEvent);
     onClose();
+
+    // Translate in background and update with bilingual versions
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: title.trim(), notes: notes.trim() || undefined }),
+      });
+      if (res.ok) {
+        const { en, zh, notesEn, notesZh } = await res.json();
+        await addOrUpdateEvent({
+          ...baseEvent,
+          titleEn: en,
+          titleZh: zh,
+          notesEn: notesEn || undefined,
+          notesZh: notesZh || undefined,
+        });
+      }
+    } catch {
+      // Translation failed silently — original title still saved and visible
+    }
   };
 
   const handleDelete = async () => {

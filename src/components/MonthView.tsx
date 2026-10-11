@@ -9,7 +9,7 @@ import {
   getAhmaLocationBgClass,
 } from '../data/schedule';
 import { getPublicHoliday, getHolidayName } from '../data/holidays';
-import { translations, getShiftLabel, getCategoryLabel } from '../data/i18n';
+import { translations, getShiftLabel, getCategoryLabel, getEventTitle } from '../data/i18n';
 import {
   Plus,
   Sparkles,
@@ -270,7 +270,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     >
                       <span className="flex items-center gap-1 truncate">
                         <span className="shrink-0">{getCategoryLabel(ev.category, language).split(' ')[0]}</span>
-                        <span className="truncate">{ev.title}</span>
+                        <span className="truncate">{getEventTitle(ev, language)}</span>
                       </span>
                       {ev.time && <span className="text-3xs text-zinc-500 font-medium shrink-0 ml-1">{ev.time}</span>}
                     </div>
@@ -457,7 +457,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                             title={ev.title}
                           >
                             <span className="shrink-0 text-3xs">{getCategoryLabel(ev.category, language).split(' ')[0]}</span>
-                            <span className="truncate">{ev.title}</span>
+                            <span className="truncate">{getEventTitle(ev, language)}</span>
                           </div>
                         ))}
 

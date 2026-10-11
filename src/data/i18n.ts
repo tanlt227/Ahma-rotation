@@ -175,3 +175,34 @@ export function getCategoryLabel(category: string, lang: Language): string {
   if (!cat) return category;
   return `${cat.icon} ${lang === 'zh' ? cat.zh : cat.en}`;
 }
+
+// ---------------------------------------------------------------------------
+// Bilingual event title/notes helpers
+// ---------------------------------------------------------------------------
+
+export interface BilingualEvent {
+  title: string;
+  titleEn?: string;
+  titleZh?: string;
+  notes?: string;
+  notesEn?: string;
+  notesZh?: string;
+}
+
+/**
+ * Returns the best available title for the given language.
+ * Priority: translated version → original title
+ */
+export function getEventTitle(event: BilingualEvent, lang: Language): string {
+  if (lang === 'zh') return event.titleZh || event.title;
+  return event.titleEn || event.title;
+}
+
+/**
+ * Returns the best available notes for the given language.
+ * Priority: translated version → original notes
+ */
+export function getEventNotes(event: BilingualEvent, lang: Language): string | undefined {
+  if (lang === 'zh') return event.notesZh || event.notes;
+  return event.notesEn || event.notes;
+}

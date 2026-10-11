@@ -9,7 +9,7 @@ import {
   getAhmaLocationBgClass,
 } from '../data/schedule';
 import { getPublicHoliday, getHolidayName } from '../data/holidays';
-import { getShiftLabel, getCategoryLabel } from '../data/i18n';
+import { getShiftLabel, getCategoryLabel, getEventTitle } from '../data/i18n';
 import {
   Calendar,
   Heart,
@@ -74,7 +74,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const text = `${dateStr} ${holiday?.name || ''} ${getAhmaDisplayName(grandma.locationCode)} ${grandma.locationCode} ${junjie.shift.name} ${dayEvents.map(e => e.title).join(' ')}`.toLowerCase();
+      const text = `${dateStr} ${holiday?.name || ''} ${holiday?.nameZh || ''} ${getAhmaDisplayName(grandma.locationCode)} ${grandma.locationCode} ${junjie.shift.name} ${dayEvents.map(e => `${e.title} ${e.titleEn || ''} ${e.titleZh || ''}`).join(' ')}`.toLowerCase();
       if (!text.includes(q)) matches = false;
     }
 
@@ -238,7 +238,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
                       className="px-2 py-0.5 rounded-md font-semibold bg-blue-50 text-blue-900 border border-blue-200 flex items-center gap-1"
                     >
                       <span className="shrink-0">{getCategoryLabel(ev.category, language).split(' ')[0]}</span>
-                      <span>{ev.title}</span>
+                      <span>{getEventTitle(ev, language)}</span>
                     </div>
                   ))}
                 </div>

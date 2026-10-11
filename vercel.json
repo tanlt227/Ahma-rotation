@@ -13,6 +13,7 @@
     { "source": "/api/settings",        "destination": "/api/settings"  },
     { "source": "/api/reset",           "destination": "/api/reset"     },
     { "source": "/api/chat",            "destination": "/api/chat"      },
+    { "source": "/api/translate",        "destination": "/api/translate" },
     { "source": "/telegram/webhook",    "destination": "/api/telegram"  },
     { "source": "/(.*)",                "destination": "/index.html"    }
   ]

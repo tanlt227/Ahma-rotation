@@ -2,7 +2,7 @@ import React from 'react';
 import { useCalendar } from '../context/CalendarContext';
 import { getGrandmaLocation, getScheduledJunjieShift, getAhmaLocationName, getShiftColorClass, getAhmaLocationBgClass } from '../data/schedule';
 import { getPublicHoliday, getHolidayName } from '../data/holidays';
-import { getShiftLabel, getCategoryLabel } from '../data/i18n';
+import { getShiftLabel, getCategoryLabel, getEventTitle, getEventNotes } from '../data/i18n';
 import { CalendarEvent } from '../types';
 import {
   X,
@@ -299,7 +299,7 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                         <div>
                           <div className="flex items-center gap-1.5">
                             <span className="text-sm">{getCategoryLabel(ev.category, language).split(' ')[0]}</span>
-                            <h5 className="font-bold text-sm text-zinc-900">{ev.title}</h5>
+                            <h5 className="font-bold text-sm text-zinc-900">{getEventTitle(ev, language)}</h5>
                           </div>
                           <div className="text-2xs text-zinc-500 font-medium mt-0.5">
                             {getCategoryLabel(ev.category, language).split(' ').slice(1).join(' ')}
@@ -312,9 +312,9 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                               {language === 'zh' ? '对象: ' : 'For: '}{member.name}
                             </div>
                           )}
-                          {ev.notes && (
+                          {getEventNotes(ev, language) && (
                             <p className="text-xs text-zinc-600 mt-1 p-2 bg-zinc-50 rounded-lg border border-zinc-100">
-                              {ev.notes}
+                              {getEventNotes(ev, language)}
                             </p>
                           )}
                         </div>

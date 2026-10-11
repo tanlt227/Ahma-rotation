@@ -9,7 +9,7 @@ import {
   getAhmaLocationBgClass,
 } from '../data/schedule';
 import { getPublicHoliday, getHolidayName } from '../data/holidays';
-import { translations, getShiftLabel, getCategoryLabel } from '../data/i18n';
+import { translations, getShiftLabel, getCategoryLabel, getEventTitle } from '../data/i18n';
 import {
   Heart,
   Clock,
@@ -237,7 +237,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         >
                           <div className="truncate flex items-center gap-1">
                             <span className="shrink-0">{getCategoryLabel(ev.category, language).split(' ')[0]}</span>
-                            <span className="truncate">{ev.title}</span>
+                            <span className="truncate">{getEventTitle(ev, language)}</span>
                           </div>
                           {ev.time && (
                             <div className="text-3xs text-zinc-500 font-medium">{ev.time}</div>

@@ -50,14 +50,18 @@ export type EventCategory =
 
 export interface CalendarEvent {
   id: string;
-  title: string;
-  startDate: string; // YYYY-MM-DD
-  endDate?: string; // YYYY-MM-DD
+  title: string;       // original as entered by user
+  titleEn?: string;    // auto-translated English version
+  titleZh?: string;    // auto-translated Chinese version
+  startDate: string;   // YYYY-MM-DD
+  endDate?: string;    // YYYY-MM-DD
   category: EventCategory;
-  memberId?: string; // 'all' | 'grandma' | 'junjie' | member id
+  memberId?: string;
   time?: string;
   location?: string;
   notes?: string;
+  notesEn?: string;
+  notesZh?: string;
   createdAt: string;
   updatedAt: string;
 }
