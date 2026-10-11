@@ -9,7 +9,7 @@ import {
   getAhmaLocationBgClass,
 } from '../data/schedule';
 import { getPublicHoliday } from '../data/holidays';
-import { translations } from '../data/i18n';
+import { translations, getShiftLabel } from '../data/i18n';
 import {
   Heart,
   Clock,
@@ -171,8 +171,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                     </div>
                   )}
 
-                  {/* Jun Jie's Shift - Match shift table colors, Shift name in bold black, Shift hours not bold but black */}
-                  {junjie && (
+                    {junjie && (
                     <div className={`mt-2 p-2.5 rounded-xl border-2 text-xs ${getShiftColorClass(junjie.shift.code)}`}>
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-black">
@@ -180,9 +179,9 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         </span>
                       </div>
                       <div className="font-bold text-sm mt-0.5 text-black">
-                        {junjie.shift.name}
+                        {getShiftLabel(junjie.shift.name, junjie.shift.time ?? '', language)}
                       </div>
-                      {junjie.shift.time && (
+                      {junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave' && (
                         <div className="text-xs font-normal text-black flex items-center gap-1 mt-0.5">
                           <Clock className="w-3.5 h-3.5" />
                           <span>{junjie.shift.time}</span>

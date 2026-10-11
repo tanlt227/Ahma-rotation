@@ -119,7 +119,7 @@ export const SHIFT_NAME_ZH: Record<string, string> = {
   'Afternoon 1': '午1班',
   'Afternoon 2': '午2班',
   'Afternoon 3': '午3班',
-  'OFF Day': '休',
+  'OFF Day': '休息',
   'REST DAY': '休息',
   'Annual Leave / MC': '年假/病假',
   'Custom Shift': '特别班次',

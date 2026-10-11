@@ -197,7 +197,7 @@ function resolveAnswer(message: string, isZh: boolean): string {
     const ZH_SHIFT: Record<string, string> = {
       'Night': '晚班', 'Morning': '早班',
       'Afternoon 1': '午1班', 'Afternoon 2': '午2班', 'Afternoon 3': '午3班',
-      'OFF Day': '休', 'REST DAY': '休息',
+      'OFF Day': '休息', 'REST DAY': '休息',
     };
     const shiftLabelEn = shift.time ? `${shift.name} (${shift.time})` : shift.name;
     const shiftLabelZh = shift.time

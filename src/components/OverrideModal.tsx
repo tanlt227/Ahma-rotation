@@ -292,14 +292,14 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
               </label>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {[
-                  { code: 'NIGHT', name: 'Night', time: '2200-0900' },
-                  { code: 'MORNING', name: 'Morning', time: '0630-1530' },
-                  { code: 'AFTERNOON_1', name: 'Afternoon 1', time: '1400-0200' },
-                  { code: 'AFTERNOON_2', name: 'Afternoon 2', time: '1500-0100' },
-                  { code: 'AFTERNOON_3', name: 'Afternoon 3', time: '1600-0100' },
-                  { code: 'OFF', name: 'OFF Day', time: '' },
-                  { code: 'REST', name: 'REST DAY', time: '' },
-                  { code: 'LEAVE', name: 'Annual Leave', time: 'Leave' },
+                  { code: 'NIGHT',       name: 'Night',         nameZh: '晚班', time: '2200-0900' },
+                  { code: 'MORNING',     name: 'Morning',       nameZh: '早班', time: '0630-1530' },
+                  { code: 'AFTERNOON_1', name: 'Afternoon 1',   nameZh: '午1班', time: '1400-0200' },
+                  { code: 'AFTERNOON_2', name: 'Afternoon 2',   nameZh: '午2班', time: '1500-0100' },
+                  { code: 'AFTERNOON_3', name: 'Afternoon 3',   nameZh: '午3班', time: '1600-0100' },
+                  { code: 'OFF',         name: 'OFF Day',       nameZh: '休息',  time: '' },
+                  { code: 'REST',        name: 'REST DAY',      nameZh: '休息',  time: '' },
+                  { code: 'LEAVE',       name: 'Annual Leave',  nameZh: '年假/病假', time: 'Leave' },
                 ].map((s) => (
                   <button
                     type="button"
@@ -315,8 +315,8 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
                         : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
                     }`}
                   >
-                    <span>{s.name}</span>
-                    {s.time && <span className="opacity-80 text-3xs font-normal">{s.time}</span>}
+                    <span>{language === 'zh' ? s.nameZh : s.name}</span>
+                    {s.time && s.time !== 'Leave' && <span className="opacity-80 text-3xs font-normal">{s.time}</span>}
                   </button>
                 ))}
               </div>

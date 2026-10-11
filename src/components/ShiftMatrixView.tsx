@@ -299,15 +299,15 @@ export const ShiftMatrixView: React.FC<ShiftMatrixViewProps> = ({ onOpenOverride
                   }}
                   className="w-full px-3 py-2 border-2 border-zinc-300 rounded-xl text-xs font-bold bg-white"
                 >
-                  <option value="NIGHT">Night (2200-0900)</option>
-                  <option value="MORNING">Morning (0630-1530)</option>
-                  <option value="AFTERNOON_1">Afternoon 1 / 午1 (1400-0200)</option>
-                  <option value="AFTERNOON_2">Afternoon 2 / 午2 (1500-0100)</option>
-                  <option value="AFTERNOON_3">Afternoon 3 / 午3 (1600-0100)</option>
-                  <option value="OFF">OFF Day</option>
-                  <option value="REST">REST DAY</option>
-                  <option value="LEAVE">Annual Leave / MC</option>
-                  <option value="CUSTOM">Custom Shift</option>
+                  <option value="NIGHT">{language === 'zh' ? '晚班 Night (2200-0900)' : 'Night (2200-0900)'}</option>
+                  <option value="MORNING">{language === 'zh' ? '早班 Morning (0630-1530)' : 'Morning (0630-1530)'}</option>
+                  <option value="AFTERNOON_1">{language === 'zh' ? '午1班 Afternoon 1 (1400-0200)' : 'Afternoon 1 (1400-0200)'}</option>
+                  <option value="AFTERNOON_2">{language === 'zh' ? '午2班 Afternoon 2 (1500-0100)' : 'Afternoon 2 (1500-0100)'}</option>
+                  <option value="AFTERNOON_3">{language === 'zh' ? '午3班 Afternoon 3 (1600-0100)' : 'Afternoon 3 (1600-0100)'}</option>
+                  <option value="OFF">{language === 'zh' ? '休息 OFF Day' : 'OFF Day'}</option>
+                  <option value="REST">{language === 'zh' ? '休息 REST DAY' : 'REST DAY'}</option>
+                  <option value="LEAVE">{language === 'zh' ? '年假/病假 Annual Leave / MC' : 'Annual Leave / MC'}</option>
+                  <option value="CUSTOM">{language === 'zh' ? '特别班次 Custom Shift' : 'Custom Shift'}</option>
                 </select>
               </div>
 
