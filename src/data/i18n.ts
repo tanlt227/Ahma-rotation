@@ -125,15 +125,32 @@ export const SHIFT_NAME_ZH: Record<string, string> = {
   'Custom Shift': '特别班次',
 };
 
+// Maps shift CODE to Chinese name — used as fallback when name lookup fails
+export const SHIFT_CODE_ZH: Record<string, string> = {
+  'NIGHT':       '晚班',
+  'MORNING':     '早班',
+  'AFTERNOON_1': '午1班',
+  'AFTERNOON_2': '午2班',
+  'AFTERNOON_3': '午3班',
+  'OFF':         '休息',
+  'REST':        '休息',
+  'LEAVE':       '年假/病假',
+  'CUSTOM':      '特别班次',
+};
+
 /** Returns the localised shift label: Chinese short form or English name. */
-export function getShiftName(name: string, lang: Language): string {
-  if (lang === 'zh') return SHIFT_NAME_ZH[name] ?? name;
+export function getShiftName(name: string, lang: Language, code?: string): string {
+  if (lang !== 'zh') return name;
+  // Try name lookup first
+  if (SHIFT_NAME_ZH[name]) return SHIFT_NAME_ZH[name];
+  // Fall back to code lookup (handles legacy stored names like 'OFF Day', 'REST DAY')
+  if (code && SHIFT_CODE_ZH[code]) return SHIFT_CODE_ZH[code];
   return name;
 }
 
-/** Returns the localised shift time label, e.g. "早 (0630-1530)" in ZH. */
-export function getShiftLabel(name: string, time: string, lang: Language): string {
-  const n = getShiftName(name, lang);
+/** Returns the localised shift name + optional time, e.g. "早班 (0630-1530)" */
+export function getShiftLabel(name: string, time: string, lang: Language, code?: string): string {
+  const n = getShiftName(name, lang, code);
   if (!time || time === 'Off' || time === 'Rest' || time === 'Leave') return n;
   return `${n} (${time})`;
 }

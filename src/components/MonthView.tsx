@@ -251,7 +251,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     <div className={`p-2 rounded-xl border ${getShiftColorClass(junjie.shift.code)}`}>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-bold text-black">
-                          {language === 'zh' ? '俊杰:' : 'Jun Jie:'} {getShiftLabel(junjie.shift.name, '', language)}
+                          {language === 'zh' ? '俊杰:' : 'Jun Jie:'} {getShiftLabel(junjie.shift.name, '', language, junjie.shift.code)}
                         </span>
                         {junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave' && (
                           <span className="text-xs font-normal text-black bg-white/60 px-2 py-0.5 rounded border border-black/10">
@@ -434,7 +434,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                             <div className="flex items-center justify-between gap-1 leading-tight">
                               <span className="truncate font-bold text-black">
                                 {junjie.isOverridden ? '⚡ ' : ''}
-                                {getShiftLabel(junjie.shift.name, '', language)}
+                                {getShiftLabel(junjie.shift.name, '', language, junjie.shift.code)}
                               </span>
                               {junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave' && (
                                 <span className="font-normal text-black text-3xs shrink-0 whitespace-nowrap">

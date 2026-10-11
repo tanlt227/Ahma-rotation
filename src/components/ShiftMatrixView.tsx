@@ -57,8 +57,8 @@ export const ShiftMatrixView: React.FC<ShiftMatrixViewProps> = ({ onOpenOverride
         { dayOfWeek: 1, code: 'MORNING', name: 'Morning', time: '0630-1530' },
         { dayOfWeek: 2, code: 'OFF', name: 'OFF Day', time: '' },
         { dayOfWeek: 3, code: 'REST', name: 'REST DAY', time: '' },
-        { dayOfWeek: 4, code: 'AFTERNOON_1', name: 'Afternoon 1', time: '1400-0200' },
-        { dayOfWeek: 5, code: 'AFTERNOON_2', name: 'Afternoon 2', time: '1500-0100' },
+        { dayOfWeek: 4, code: 'AFTERNOON_1', name: 'Afternoon 1', time: '1400-0100' },
+        { dayOfWeek: 5, code: 'AFTERNOON_2', name: 'Afternoon 2', time: '1500-0200' },
         { dayOfWeek: 6, code: 'REST', name: 'REST DAY', time: '' },
       ],
     };
@@ -244,7 +244,7 @@ export const ShiftMatrixView: React.FC<ShiftMatrixViewProps> = ({ onOpenOverride
                         title="Click to edit shift"
                       >
                         <div className="font-black text-xs sm:text-sm tracking-tight">
-                          {getShiftName(day.name, language)}
+                          {getShiftName(day.name, language, day.code)}
                         </div>
                         {day.time && day.time !== 'Off' && day.time !== 'Rest' && day.time !== 'Leave' ? (
                           <div className="text-3xs font-extrabold opacity-95 mt-0.5">

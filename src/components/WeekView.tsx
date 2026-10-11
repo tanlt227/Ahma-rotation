@@ -179,7 +179,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                         </span>
                       </div>
                       <div className="font-bold text-sm mt-0.5 text-black">
-                        {getShiftLabel(junjie.shift.name, '', language)}
+                        {getShiftLabel(junjie.shift.name, '', language, junjie.shift.code)}
                       </div>
                       {junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave' && (
                         <div className="text-xs font-normal text-black flex items-center gap-1 mt-0.5">

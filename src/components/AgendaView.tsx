@@ -212,7 +212,7 @@ export const AgendaView: React.FC<AgendaViewProps> = ({
 
                   {/* Jun Jie Shift */}
                   <div className={`px-2 py-0.5 rounded-md border ${getShiftColorClass(item.junjie.shift.code)}`}>
-                    <span className="font-bold text-black">{language === 'zh' ? '俊杰:' : 'Jun Jie:'} {getShiftLabel(item.junjie.shift.name, '', language)}</span>
+                    <span className="font-bold text-black">{language === 'zh' ? '俊杰:' : 'Jun Jie:'} {getShiftLabel(item.junjie.shift.name, '', language, item.junjie.shift.code)}</span>
                     {item.junjie.shift.time && item.junjie.shift.time !== 'Off' && item.junjie.shift.time !== 'Rest' && item.junjie.shift.time !== 'Leave' && (
                       <span className="text-3xs ml-1 font-normal text-black bg-white/50 px-1 py-0.2 rounded border border-black/10">
                         {item.junjie.shift.time}

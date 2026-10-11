@@ -205,41 +205,17 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Quick Anchor Shortcuts & Filter Toggles */}
+        {/* Quick Date Picker & Filter Toggles */}
         <div className="mt-2 pt-2 border-t border-zinc-100 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar text-xs">
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-zinc-500 text-2xs font-bold uppercase mr-0.5 hidden xs:inline">{t.jump}</span>
-            <button
-              onClick={() => handleJumpToDate('2026-02-16')}
-              className={`px-2 py-0.5 rounded-md text-2xs sm:text-xs font-bold transition-all shrink-0 ${
-                selectedDate === '2026-02-16' || selectedDate === '2026-02-17' || selectedDate === '2026-02-18'
-                  ? 'bg-rose-700 text-white shadow-xs'
-                  : 'bg-rose-50 text-rose-900 hover:bg-rose-100 border border-rose-300'
-              }`}
-              title="2026 CNY Eve - Day 2: Kay Guan (启源)"
-            >
-              🧧 2026 CNY ({language === 'zh' ? '启源' : 'KG'})
-            </button>
-            <button
-              onClick={() => handleJumpToDate('2026-05-07')}
-              className={`px-2 py-0.5 rounded-md text-2xs sm:text-xs font-bold transition-all shrink-0 ${
-                selectedDate === '2026-05-07'
-                  ? 'bg-teal-700 text-white shadow-xs'
-                  : 'bg-teal-50 text-teal-900 hover:bg-teal-100 border border-teal-300'
-              }`}
-            >
-              👵 7 May 2026 ({language === 'zh' ? '启超' : 'KC'})
-            </button>
-            <button
-              onClick={() => handleJumpToDate('2026-06-15')}
-              className={`px-2 py-0.5 rounded-md text-2xs sm:text-xs font-bold transition-all shrink-0 ${
-                selectedDate === '2026-06-15'
-                  ? 'bg-purple-700 text-white shadow-xs'
-                  : 'bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-300'
-              }`}
-            >
-              💼 15 Jun 2026 (W1 Start)
-            </button>
+            {/* Date picker jump */}
+            <span className="text-zinc-500 text-2xs font-bold uppercase hidden xs:inline">{t.jump}</span>
+            <input
+              type="date"
+              onChange={(e) => { if (e.target.value) handleJumpToDate(e.target.value); }}
+              className="px-2 py-0.5 rounded-md text-2xs sm:text-xs font-bold border border-zinc-300 bg-white text-zinc-800 focus:outline-rose-500 shadow-2xs"
+              title={language === 'zh' ? '跳转到指定日期' : 'Jump to date'}
+            />
             <button
               onClick={handleToday}
               className="px-2 py-0.5 rounded-md text-2xs sm:text-xs font-bold bg-zinc-100 text-zinc-800 hover:bg-zinc-200 border border-zinc-300 shrink-0"

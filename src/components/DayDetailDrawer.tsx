@@ -233,7 +233,7 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 
               <div className="flex items-baseline gap-2.5">
                 <span className="text-xl font-bold text-black">
-                  {getShiftLabel(junjie.shift.name, '', language)}
+                  {getShiftLabel(junjie.shift.name, '', language, junjie.shift.code)}
                 </span>
               </div>
 
