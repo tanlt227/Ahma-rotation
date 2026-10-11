@@ -37,6 +37,7 @@ function CalendarApp() {
     setEventTargetDate(dateStr || selectedDate);
     setEditingEvent(event || null);
     setIsEventModalOpen(true);
+    setIsDrawerOpen(false); // close drawer so EventModal renders on top cleanly
   };
 
   const handleOpenOverrideModal = (

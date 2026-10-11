@@ -79,8 +79,9 @@ export const EventModal: React.FC<EventModalProps> = ({
     if (!title.trim() || !startDate) return;
 
     // Build base event first so it saves instantly (optimistic)
-    const baseEvent: Partial<typeof editingEvent & { titleEn?: string; titleZh?: string; notesEn?: string; notesZh?: string }> = {
-      id: editingEvent?.id,
+    const stableId = editingEvent?.id || `ev-${Date.now()}`;
+    const baseEvent = {
+      id: stableId,
       title: title.trim(),
       startDate,
       endDate: endDate || undefined,
@@ -104,16 +105,18 @@ export const EventModal: React.FC<EventModalProps> = ({
       });
       if (res.ok) {
         const { en, zh, notesEn, notesZh } = await res.json();
-        await addOrUpdateEvent({
-          ...baseEvent,
-          titleEn: en,
-          titleZh: zh,
-          notesEn: notesEn || undefined,
-          notesZh: notesZh || undefined,
-        });
+        if (en !== title.trim() || zh !== title.trim()) {
+          await addOrUpdateEvent({
+            ...baseEvent,
+            titleEn: en,
+            titleZh: zh,
+            notesEn: notesEn || undefined,
+            notesZh: notesZh || undefined,
+          });
+        }
       }
     } catch {
-      // Translation failed silently — original title still saved and visible
+      // Translation failed silently — original title stays visible
     }
   };
 
