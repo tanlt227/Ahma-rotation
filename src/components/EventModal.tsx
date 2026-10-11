@@ -10,13 +10,29 @@ interface EventModalProps {
   editingEvent?: CalendarEvent | null;
 }
 
+const CATEGORY_LABELS: Record<EventCategory, { en: string; zh: string }> = {
+  holiday_plan:         { en: '✈️ Holiday / Vacation Plan',       zh: '✈️ 旅行 / 假期计划' },
+  family_gathering:     { en: '🍲 Family Gathering / Dinner',     zh: '🍲 家庭聚餐 / 聚会' },
+  medical:              { en: '🏥 Medical / Polyclinic Appt',     zh: '🏥 医疗 / 诊所预约' },
+  leave:                { en: '🏖️ Leave / Rest Plan',             zh: '🏖️ 休假 / 休息计划' },
+  unusual_arrangement:  { en: '⚡ Unusual Arrangement',           zh: '⚡ 特殊安排' },
+  general:              { en: '📌 General Note',                  zh: '📌 一般备注' },
+};
+
+interface EventModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  targetDate: string;
+  editingEvent?: CalendarEvent | null;
+}
+
 export const EventModal: React.FC<EventModalProps> = ({
   isOpen,
   onClose,
   targetDate,
   editingEvent,
 }) => {
-  const { addOrUpdateEvent, deleteEvent, familyMembers } = useCalendar();
+  const { addOrUpdateEvent, deleteEvent, familyMembers, language } = useCalendar();
 
   const [title, setTitle] = useState('');
   const [startDate, setStartDate] = useState(targetDate);
@@ -87,10 +103,12 @@ export const EventModal: React.FC<EventModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-base sm:text-lg">
-                {editingEvent ? 'Edit Family Plan' : 'Add Family Plan / Holiday'}
+                {editingEvent
+                  ? (language === 'zh' ? '修改家庭计划' : 'Edit Family Plan')
+                  : (language === 'zh' ? '添加家庭计划 / 假期' : 'Add Family Plan / Holiday')}
               </h3>
               <p className="text-xs text-rose-100">
-                Syncs in real-time across all family members' devices
+                {language === 'zh' ? '实时同步至所有家庭成员的设备' : 'Syncs in real-time across all family members\' devices'}
               </p>
             </div>
           </div>
@@ -106,12 +124,12 @@ export const EventModal: React.FC<EventModalProps> = ({
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-bold text-zinc-700 mb-1">
-              Event Title / Holiday Plan *
+              {language === 'zh' ? '活动标题 / 假期计划 *' : 'Event Title / Holiday Plan *'}
             </label>
             <input
               type="text"
               required
-              placeholder="e.g. Sentosa Staycation, Family Reunion Dinner, Grandma Checkup..."
+              placeholder={language === 'zh' ? '例如：圣淘沙度假、家庭聚餐、阿嬷复诊...' : 'e.g. Sentosa Staycation, Family Reunion Dinner, Grandma Checkup...'}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm font-semibold focus:outline-rose-500 shadow-2xs"
@@ -122,7 +140,7 @@ export const EventModal: React.FC<EventModalProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-zinc-700 mb-1">
-                Start Date *
+                {language === 'zh' ? '开始日期 *' : 'Start Date *'}
               </label>
               <input
                 type="date"
@@ -134,7 +152,7 @@ export const EventModal: React.FC<EventModalProps> = ({
             </div>
             <div>
               <label className="block text-xs font-bold text-zinc-700 mb-1">
-                End Date (Multi-day)
+                {language === 'zh' ? '结束日期（多天活动）' : 'End Date (Multi-day)'}
               </label>
               <input
                 type="date"
@@ -150,32 +168,31 @@ export const EventModal: React.FC<EventModalProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-zinc-700 mb-1">
-                Category
+                {language === 'zh' ? '活动类别' : 'Category'}
               </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as EventCategory)}
                 className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-xs font-semibold focus:outline-rose-500 shadow-2xs bg-white"
               >
-                <option value="holiday_plan">✈️ Holiday / Vacation Plan</option>
-                <option value="family_gathering">🍲 Family Gathering / Dinner</option>
-                <option value="medical">🏥 Medical / Polyclinic Appt</option>
-                <option value="leave">🏖️ Leave / Rest Plan</option>
-                <option value="unusual_arrangement">⚡ Unusual Arrangement</option>
-                <option value="general">📌 General Note</option>
+                {(Object.keys(CATEGORY_LABELS) as EventCategory[]).map((cat) => (
+                  <option key={cat} value={cat}>
+                    {CATEGORY_LABELS[cat][language]}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-zinc-700 mb-1">
-                Family Member
+                {language === 'zh' ? '家庭成员' : 'Family Member'}
               </label>
               <select
                 value={memberId}
                 onChange={(e) => setMemberId(e.target.value)}
                 className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-xs font-semibold focus:outline-rose-500 shadow-2xs bg-white"
               >
-                <option value="all">👨‍👩‍👧‍👦 Whole Family</option>
+                <option value="all">{language === 'zh' ? '👨‍👩‍👧‍👦 全家人' : '👨‍👩‍👧‍👦 Whole Family'}</option>
                 {familyMembers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name} ({m.relationship})
@@ -189,11 +206,11 @@ export const EventModal: React.FC<EventModalProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-zinc-700 mb-1">
-                Time (Optional)
+                {language === 'zh' ? '时间（可选）' : 'Time (Optional)'}
               </label>
               <input
                 type="text"
-                placeholder="e.g. 18:30 or All Day"
+                placeholder={language === 'zh' ? '例如：18:30 或 全天' : 'e.g. 18:30 or All Day'}
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-xs focus:outline-rose-500 shadow-2xs"
@@ -201,11 +218,11 @@ export const EventModal: React.FC<EventModalProps> = ({
             </div>
             <div>
               <label className="block text-xs font-bold text-zinc-700 mb-1">
-                Location (Optional)
+                {language === 'zh' ? '地点（可选）' : 'Location (Optional)'}
               </label>
               <input
                 type="text"
-                placeholder="e.g. KC House, Sentosa, Polyclinic..."
+                placeholder={language === 'zh' ? '例如：启超家、圣淘沙、诊所...' : 'e.g. KC House, Sentosa, Polyclinic...'}
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-xs focus:outline-rose-500 shadow-2xs"
@@ -216,11 +233,11 @@ export const EventModal: React.FC<EventModalProps> = ({
           {/* Notes */}
           <div>
             <label className="block text-xs font-bold text-zinc-700 mb-1">
-              Notes & Details
+              {language === 'zh' ? '备注与详情' : 'Notes & Details'}
             </label>
             <textarea
               rows={2}
-              placeholder="Any details for the family..."
+              placeholder={language === 'zh' ? '给家人的任何备注...' : 'Any details for the family...'}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-xs focus:outline-rose-500 shadow-2xs"
@@ -236,7 +253,7 @@ export const EventModal: React.FC<EventModalProps> = ({
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Event</span>
+                <span>{language === 'zh' ? '删除活动' : 'Delete Event'}</span>
               </button>
             ) : (
               <div />
@@ -248,13 +265,15 @@ export const EventModal: React.FC<EventModalProps> = ({
                 onClick={onClose}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-600 hover:bg-zinc-100 transition-colors"
               >
-                Cancel
+                {language === 'zh' ? '取消' : 'Cancel'}
               </button>
               <button
                 type="submit"
                 className="px-5 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-colors"
               >
-                {editingEvent ? 'Save Changes' : 'Add to Calendar'}
+                {editingEvent
+                  ? (language === 'zh' ? '保存修改' : 'Save Changes')
+                  : (language === 'zh' ? '添加到日历' : 'Add to Calendar')}
               </button>
             </div>
           </div>

@@ -89,8 +89,10 @@ export const ShiftMatrixView: React.FC<ShiftMatrixViewProps> = ({ onOpenOverride
     const day = editableWeeks[weekIdx].days[dayIdx];
     setSelectedCell({ weekIdx, dayIdx });
     setCellCode(day.code);
-    setCellName(day.name);
-    setCellTime(day.time || '');
+    // Populate name+time from SHIFT_DEFINITIONS to ensure they're always in sync
+    const def = SHIFT_DEFINITIONS[day.code];
+    setCellName(def ? def.name : day.name);
+    setCellTime(def ? (def.time && def.time !== 'Off' && def.time !== 'Rest' && def.time !== 'Leave' ? def.time : '') : (day.time || ''));
   };
 
   const handleSaveCellEdit = () => {
@@ -242,13 +244,15 @@ export const ShiftMatrixView: React.FC<ShiftMatrixViewProps> = ({ onOpenOverride
                         className={`p-2 border border-zinc-300 font-black text-xs ${cellBg} cursor-pointer hover:ring-2 hover:ring-purple-500 hover:scale-[0.98] transition-all select-none relative group`}
                         title="Click to edit shift"
                       >
-                        <div className="font-black text-xs sm:text-sm tracking-tight">{getShiftLabel(day.name, day.time ?? '', language)}</div>
-                        {day.time ? (
+                        <div className="font-black text-xs sm:text-sm tracking-tight">
+                          {getShiftLabel(day.name, '', language)}
+                        </div>
+                        {day.time && day.time !== 'Off' && day.time !== 'Rest' && day.time !== 'Leave' ? (
                           <div className="text-3xs font-extrabold opacity-95 mt-0.5">
-                            ({day.time})
+                            {day.time}
                           </div>
                         ) : (
-                          <div className="text-3xs font-semibold opacity-70 mt-0.5">-</div>
+                          <div className="text-3xs font-semibold opacity-50 mt-0.5">—</div>
                         )}
                         <span className="hidden group-hover:block absolute top-1 right-1 p-0.5 rounded bg-black/20 text-white">
                           <Edit2 className="w-2.5 h-2.5" />
@@ -294,7 +298,8 @@ export const ShiftMatrixView: React.FC<ShiftMatrixViewProps> = ({ onOpenOverride
                     const def = SHIFT_DEFINITIONS[code];
                     if (def) {
                       setCellName(def.name);
-                      setCellTime(def.time || '');
+                      // Clear time for non-working shifts
+                      setCellTime(def.time && def.time !== 'Off' && def.time !== 'Rest' && def.time !== 'Leave' ? def.time : '');
                     }
                   }}
                   className="w-full px-3 py-2 border-2 border-zinc-300 rounded-xl text-xs font-bold bg-white"
