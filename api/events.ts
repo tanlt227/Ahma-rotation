@@ -17,6 +17,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const toSave: CalendarEvent = {
       id: event.id || `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       title: event.title,
+      titleEn: event.titleEn,
+      titleZh: event.titleZh,
       startDate: event.startDate,
       endDate: event.endDate,
       category: event.category || 'general',
@@ -24,6 +26,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       time: event.time,
       location: event.location,
       notes: event.notes,
+      notesEn: event.notesEn,
+      notesZh: event.notesZh,
       createdAt: event.createdAt || now,
       updatedAt: now,
     };

@@ -189,6 +189,8 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     const fullEvent: CalendarEvent = {
       id: newId,
       title: event.title || 'Family Event',
+      titleEn: event.titleEn,
+      titleZh: event.titleZh,
       startDate: event.startDate || formatISODate(new Date()),
       endDate: event.endDate,
       category: event.category || 'family_gathering',
@@ -196,6 +198,8 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
       time: event.time,
       location: event.location,
       notes: event.notes,
+      notesEn: event.notesEn,
+      notesZh: event.notesZh,
       createdAt: event.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

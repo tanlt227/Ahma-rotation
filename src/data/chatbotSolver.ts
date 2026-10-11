@@ -63,6 +63,26 @@ export function solveChatLocally(
     if (query.includes('today') || query.includes('今天')) {
       const today = new Date();
       targetDate = today.toISOString().split('T')[0];
+    } else if (query.includes('tomorrow') || query.includes('明天') || query.includes('明日')) {
+      const d = new Date(); d.setDate(d.getDate() + 1);
+      targetDate = d.toISOString().split('T')[0];
+    } else if (query.includes('day after tomorrow') || query.includes('后天')) {
+      const d = new Date(); d.setDate(d.getDate() + 2);
+      targetDate = d.toISOString().split('T')[0];
+    } else if (query.includes('next week') || query.includes('下周') || query.includes('下个星期')) {
+      const d = new Date(); d.setDate(d.getDate() + 7);
+      targetDate = d.toISOString().split('T')[0];
+    } else if (query.includes('this week') || query.includes('本周') || query.includes('这周')) {
+      const today = new Date();
+      targetDate = today.toISOString().split('T')[0];
+    } else if (query.includes('next year') || query.includes('明年')) {
+      const d = new Date(); d.setFullYear(d.getFullYear() + 1);
+      targetDate = d.toISOString().split('T')[0];
+    } else if (query.includes('this weekend') || query.includes('这个周末') || query.includes('本周末')) {
+      const d = new Date();
+      const daysToSat = (6 - d.getDay() + 7) % 7 || 7;
+      d.setDate(d.getDate() + daysToSat);
+      targetDate = d.toISOString().split('T')[0];
     }
   }
 
@@ -194,22 +214,52 @@ export function solveChatLocally(
     query.includes('假期') ||
     query.includes('公假') ||
     query.includes('public holiday') ||
-    query.includes('cny') ||
-    query.includes('chinese new year') ||
-    query.includes('national day')
+    query.includes('national day') ||
+    query.includes('国庆')
   ) {
     if (targetDate) {
       const h = getPublicHoliday(targetDate);
       if (h) {
         return isZh
-          ? `🇸🇬 **${targetDate}** 是新加坡公共假期：**${h.name}**。`
-          : `🇸🇬 **${targetDate}** is an official Singapore Public Holiday: **${h.name}**.`;
+          ? `🇸🇬 **${targetDate}** 是新加坡公共假期：**${h.nameZh || h.name}**。`
+          : `🇸🇬 **${targetDate}** is a Singapore Public Holiday: **${h.name}**.`;
+      } else {
+        return isZh
+          ? `🇸🇬 **${targetDate}** 不是新加坡公共假期。`
+          : `🇸🇬 **${targetDate}** is not a Singapore Public Holiday.`;
       }
     }
-    if (isZh) {
-      return `🇸🇬 新加坡主要公共假期：\n• 2026年5月1日：劳动节 (Labour Day)\n• 2026年5月31日 - 6月1日：卫塞节及补假 (Vesak Day)\n• 2026年8月9日 - 8月10日：国庆日及补假 (National Day)\n• 2026年11月8日 - 11月9日：屠妖节及补假 (Deepavali)\n• 2026年12月25日：圣诞节 (Christmas Day)`;
+
+    // Find the next upcoming holiday from today
+    const today = new Date().toISOString().split('T')[0];
+    const upcoming = SINGAPORE_PUBLIC_HOLIDAYS
+      .filter((h) => h.date >= today)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, 5);
+
+    if (upcoming.length > 0) {
+      const lines = upcoming.map((h) =>
+        isZh
+          ? `• ${h.date}：${h.nameZh || h.name}`
+          : `• ${h.date}: ${h.name}`
+      ).join('\n');
+      return isZh
+        ? `🇸🇬 新加坡即将到来的公共假期：\n${lines}`
+        : `🇸🇬 Upcoming Singapore Public Holidays:\n${lines}`;
     }
-    return `🇸🇬 Upcoming Singapore Public Holidays:\n• 1 May 2026: Labour Day\n• 31 May – 1 Jun 2026: Vesak Day & In-Lieu\n• 9 Aug – 10 Aug 2026: National Day & In-Lieu\n• 8 Nov – 9 Nov 2026: Deepavali & In-Lieu\n• 25 Dec 2026: Christmas Day`;
+    return isZh ? '🇸🇬 暂无即将到来的公共假期数据。' : '🇸🇬 No upcoming public holidays found in the current data.';
+  }
+
+  // 4. Casual chat / greetings — warm fallback
+  const casualGreetings = ['hi', 'hello', 'hey', 'how are you', 'good morning', 'good evening', 'good night',
+    'thanks', 'thank you', 'ok', 'okay', 'nice', 'cool', '你好', '早安', '晚安', '谢谢', '好的', '嗯'];
+  if (casualGreetings.some((g) => query === g || query.startsWith(g + ' ') || query.endsWith(' ' + g))) {
+    const greetings = [
+      isZh ? '您好！😊 有什么我可以帮您的吗？' : 'Hey there! 😊 How can I help you today?',
+      isZh ? '你好！有什么想了解的吗？' : 'Hello! What can I help you with?',
+      isZh ? '😊 有需要就说哦！' : '😊 Just let me know what you need!',
+    ];
+    return greetings[Math.floor(Math.random() * greetings.length)];
   }
 
   // Default helpful message
