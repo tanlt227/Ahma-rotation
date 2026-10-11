@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "env": {
+    "GITHUB_TOKEN": "@github_token",
+    "GITHUB_REPO": "@github_repo",
+    "GITHUB_PATH": "@github_path",
+    "GEMINI_API_KEY": "@gemini_api_key",
+    "TELEGRAM_BOT_TOKEN": "@telegram_bot_token",
+    "APP_URL": "@app_url"
+  },
+  "rewrites": [
+    { "source": "/api/events",          "destination": "/api/events"    },
+    { "source": "/api/events/:id",      "destination": "/api/events?id=:id" },
+    { "source": "/api/overrides",       "destination": "/api/overrides" },
+    { "source": "/api/overrides/:id",   "destination": "/api/overrides?id=:id" },
+    { "source": "/api/members",         "destination": "/api/members"   },
+    { "source": "/api/members/:id",     "destination": "/api/members?id=:id"   },
+    { "source": "/api/state",           "destination": "/api/state"     },
+    { "source": "/api/settings",        "destination": "/api/settings"  },
+    { "source": "/api/reset",           "destination": "/api/reset"     },
+    { "source": "/api/chat",            "destination": "/api/chat"      },
+    { "source": "/telegram/webhook",    "destination": "/api/telegram"  },
+    { "source": "/(.*)",                "destination": "/index.html"    }
+  ]
+}
