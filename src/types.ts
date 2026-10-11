@@ -34,6 +34,7 @@ export interface GrandmaLocationMeta {
 export interface PublicHoliday {
   date: string; // YYYY-MM-DD
   name: string;
+  nameZh?: string;
   type: 'gazetted' | 'in_lieu' | 'school' | 'observance';
   notes?: string;
   year: number;

@@ -1,7 +1,8 @@
 import React from 'react';
 import { useCalendar } from '../context/CalendarContext';
 import { getGrandmaLocation, getScheduledJunjieShift, getAhmaLocationName, getShiftColorClass, getAhmaLocationBgClass } from '../data/schedule';
-import { getPublicHoliday } from '../data/holidays';
+import { getPublicHoliday, getHolidayName } from '../data/holidays';
+import { getShiftLabel } from '../data/i18n';
 import { CalendarEvent } from '../types';
 import {
   X,
@@ -89,10 +90,12 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
                   <span className="text-xl">🇸🇬</span>
                   <div>
                     <h4 className="text-sm font-black text-rose-950">
-                      {holiday.name}
+                      {getHolidayName(holiday, language)}
                     </h4>
                     <span className="text-3xs font-semibold text-rose-700">
-                      {holiday.type === 'in_lieu' ? 'Public Holiday in-lieu' : 'Gazetted Singapore Public Holiday'}
+                      {holiday.type === 'in_lieu'
+                        ? (language === 'zh' ? '公共假期（补假）' : 'Public Holiday in-lieu')
+                        : (language === 'zh' ? '新加坡法定公共假期' : 'Gazetted Singapore Public Holiday')}
                     </span>
                   </div>
                 </div>
@@ -230,12 +233,12 @@ export const DayDetailDrawer: React.FC<DayDetailDrawerProps> = ({
 
               <div className="flex items-baseline gap-2.5">
                 <span className="text-xl font-bold text-black">
-                  {junjie.shift.name}
+                  {getShiftLabel(junjie.shift.name, junjie.shift.time ?? '', language)}
                 </span>
               </div>
 
               {/* Show shift hours */}
-              {junjie.shift.time ? (
+              {junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave' ? (
                 <div className="mt-1.5 flex items-center gap-1 text-sm font-normal text-black">
                   <span className="text-xs text-zinc-700">{language === 'zh' ? '工作时间:' : 'Shift hours:'}</span>
                   <span className="font-normal text-black">{junjie.shift.time}</span>

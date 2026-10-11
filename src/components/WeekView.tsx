@@ -8,7 +8,7 @@ import {
   getShiftColorClass,
   getAhmaLocationBgClass,
 } from '../data/schedule';
-import { getPublicHoliday } from '../data/holidays';
+import { getPublicHoliday, getHolidayName } from '../data/holidays';
 import { translations, getShiftLabel } from '../data/i18n';
 import {
   Heart,
@@ -166,7 +166,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
                     <div className="mt-2 p-2 rounded-xl bg-rose-100 border border-rose-300 text-rose-950 text-xs">
                       <div className="font-black flex items-center gap-1">
                         <span>🇸🇬</span>
-                        <span>{holiday.name}</span>
+                        <span>{getHolidayName(holiday, language)}</span>
                       </div>
                     </div>
                   )}

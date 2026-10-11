@@ -8,8 +8,8 @@ import {
   getShiftColorClass,
   getAhmaLocationBgClass,
 } from '../data/schedule';
-import { getPublicHoliday } from '../data/holidays';
-import { translations } from '../data/i18n';
+import { getPublicHoliday, getHolidayName } from '../data/holidays';
+import { translations, getShiftLabel } from '../data/i18n';
 import {
   Plus,
   Sparkles,
@@ -209,7 +209,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                   <div className="flex items-center gap-1.5">
                     {holiday && (
                       <span className="text-2xs font-black bg-rose-100 text-rose-950 px-2 py-0.5 rounded-md border border-rose-300">
-                        🇸🇬 {holiday.name}
+                        🇸🇬 {getHolidayName(holiday, language)}
                       </span>
                     )}
                     <ChevronRight className="w-4 h-4 text-zinc-400" />
@@ -246,14 +246,14 @@ export const MonthView: React.FC<MonthViewProps> = ({
                     </div>
                   )}
 
-                  {/* Jun Jie Shift - Shift in bold black, hours in normal black, matching shift table colors */}
+                  {/* Jun Jie Shift */}
                   {junjie && (
                     <div className={`p-2 rounded-xl border ${getShiftColorClass(junjie.shift.code)}`}>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-bold text-black">
-                          {language === 'zh' ? '俊杰:' : 'Jun Jie:'} {junjie.shift.name}
+                          {language === 'zh' ? '俊杰:' : 'Jun Jie:'} {getShiftLabel(junjie.shift.name, junjie.shift.time ?? '', language)}
                         </span>
-                        {junjie.shift.time && (
+                        {junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave' && (
                           <span className="text-xs font-normal text-black bg-white/60 px-2 py-0.5 rounded border border-black/10">
                             {junjie.shift.time}
                           </span>
@@ -381,14 +381,14 @@ export const MonthView: React.FC<MonthViewProps> = ({
 
                       {/* Badges Stack with Enhanced High-Contrast Typography */}
                       <div className="mt-1 space-y-1 flex-1 overflow-hidden">
-                        {/* 1. Singapore Public Holiday */}
+                      {/* 1. Singapore Public Holiday */}
                         {holiday && (
                           <div
                             className="text-3xs sm:text-2xs font-black px-1.5 py-0.5 rounded-md truncate flex items-center gap-1 bg-rose-100 text-rose-950 border border-rose-300 shadow-2xs"
-                            title={`🇸🇬 ${holiday.name}`}
+                            title={`🇸🇬 ${getHolidayName(holiday, language)}`}
                           >
                             <span>🇸🇬</span>
-                            <span className="truncate">{holiday.name}</span>
+                            <span className="truncate">{getHolidayName(holiday, language)}</span>
                           </div>
                         )}
 
@@ -422,7 +422,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
                           </div>
                         )}
 
-                        {/* 3. Jun Jie's Shift Badge: Matching Shift table colors, Shift name in bold black, Shift hours not bold but black */}
+                        {/* 3. Jun Jie's Shift Badge */}
                         {junjie && (filterMemberId === 'all' || filterMemberId === 'junjie') && (
                           <div
                             className={`text-3xs sm:text-2xs px-1.5 py-0.5 rounded-md border shadow-2xs ${getShiftColorClass(junjie.shift.code)}`}
@@ -431,9 +431,9 @@ export const MonthView: React.FC<MonthViewProps> = ({
                             <div className="flex items-center justify-between gap-1 leading-tight">
                               <span className="truncate font-bold text-black">
                                 {junjie.isOverridden ? '⚡ ' : ''}
-                                {junjie.shift.name}
+                                {getShiftLabel(junjie.shift.name, junjie.shift.time ?? '', language)}
                               </span>
-                              {junjie.shift.time && (
+                              {junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave' && (
                                 <span className="font-normal text-black text-3xs shrink-0 whitespace-nowrap">
                                   {junjie.shift.time}
                                 </span>
