@@ -11,7 +11,8 @@ export function solveChatLocally(
   rosterWeeks?: ShiftRosterWeek[]
 ): string {
   const query = message.toLowerCase().trim();
-  const isZh = language === 'zh' || /[\u4e00-\u9fa5]/.test(message);
+  // Detect language from the message itself, fall back to app language
+  const isZh = /[\u4e00-\u9fa5]/.test(message) || language === 'zh';
 
   // 1. Date extraction
   let targetDate = '';
@@ -75,14 +76,55 @@ export function solveChatLocally(
     query.includes('grandmother') ||
     query.includes('kay cheow') ||
     query.includes('启超') ||
-    query.includes('dad') ||       // KC is Dad's place
+    query.includes('dad') ||
     query.includes('爸爸家') ||
     query.includes('kay guan') ||
     query.includes('kay boon') ||
     query.includes('启源') ||
     query.includes('启文')
   ) {
-    const checkDate = targetDate || '2026-05-07';
+    // "next visit / coming over / when" query
+    const asksNext = query.includes('next') || query.includes('when') || query.includes('coming') ||
+                     query.includes('arrive') || query.includes('下次') || query.includes('什么时候') ||
+                     query.includes('几时') || query.includes('过来');
+
+    if (asksNext) {
+      const targetCode =
+        query.includes('kc') || query.includes('kay cheow') || query.includes('启超') || query.includes('dad') || query.includes('爸爸') ? 'KC' :
+        query.includes('kg') || query.includes('kay guan') || query.includes('启源') ? 'KG' :
+        query.includes('kb') || query.includes('kay boon') || query.includes('启文') ? 'KB' : null;
+
+      const today = new Date().toISOString().split('T')[0];
+      const currentInfo = getGrandmaLocation(today, settings.grandmaAnchorDate, overrides, settings.grandmaCycleDays);
+
+      if (targetCode) {
+        // Find next arrival (dayInStay === 1) at targetCode
+        let nextDate = '';
+        let daysAway = 0;
+        for (let i = 0; i <= 42 * 3; i++) {
+          const checkD = new Date(today);
+          checkD.setDate(checkD.getDate() + i);
+          const ds = checkD.toISOString().split('T')[0];
+          const info = getGrandmaLocation(ds, settings.grandmaAnchorDate, overrides, settings.grandmaCycleDays);
+          if (info.locationCode === targetCode && info.dayInCurrentStay === 1 && i > 0) {
+            nextDate = ds; daysAway = i; break;
+          }
+        }
+        const locName = getAhmaLocationName(targetCode, isZh ? 'zh' : 'en');
+        if (nextDate) {
+          return isZh
+            ? `👵 阿嬷下次到 **${locName} (${targetCode})** 是 **${nextDate}**（${daysAway} 天后）。\n• 目前阿嬷在 ${getAhmaLocationName(currentInfo.locationCode, 'zh')}，还有 ${currentInfo.daysRemainingInStay} 天。`
+            : `👵 Ahma's next visit to **${locName} (${targetCode})** is on **${nextDate}** (in ${daysAway} days).\n• Currently at ${getAhmaLocationName(currentInfo.locationCode, 'en')}, ${currentInfo.daysRemainingInStay} days remaining.`;
+        }
+      } else {
+        // No specific location — just say where Ahma is now and when she moves next
+        return isZh
+          ? `👵 阿嬷目前在 **${getAhmaLocationName(currentInfo.locationCode, 'zh')} (${currentInfo.locationCode})**，还有 **${currentInfo.daysRemainingInStay}** 天，然后 **${currentInfo.nextMoveDate}** 前往 ${getAhmaLocationName(currentInfo.nextLocationCode, 'zh')} (${currentInfo.nextLocationCode})。`
+          : `👵 Ahma is currently at **${getAhmaLocationName(currentInfo.locationCode, 'en')} (${currentInfo.locationCode})** with **${currentInfo.daysRemainingInStay}** days left, then moves to ${getAhmaLocationName(currentInfo.nextLocationCode, 'en')} (${currentInfo.nextLocationCode}) on **${currentInfo.nextMoveDate}**.`;
+      }
+    }
+
+    const checkDate = targetDate || new Date().toISOString().split('T')[0];
     const grandma = getGrandmaLocation(checkDate, settings.grandmaAnchorDate, overrides, settings.grandmaCycleDays);
     const locNameZh = getAhmaLocationName(grandma.locationCode, 'zh');
     const locNameEn = getAhmaLocationName(grandma.locationCode, 'en');
