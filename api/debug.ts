@@ -7,6 +7,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const githubRepo  = process.env.GITHUB_REPO;
 
   const result: Record<string, unknown> = {
+    deployedCommit: '316aa13',  // update this when you want to verify a specific deploy
     env: {
       GROQ_API_KEY:  groqKey     ? `set (ends ...${groqKey.slice(-4)})`     : 'NOT SET ❌',
       GITHUB_TOKEN:  githubToken ? `set (ends ...${githubToken.slice(-4)})` : 'NOT SET ❌',
