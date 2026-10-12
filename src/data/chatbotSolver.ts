@@ -222,12 +222,15 @@ export function solveChatLocally(
       }
     }
 
-    // Find the next upcoming holiday from today
+    // Check if a specific year is mentioned
+    const yearMatch = message.match(/\b(202\d|203\d)\b/);
+    const filterYear = yearMatch ? parseInt(yearMatch[1]) : null;
+
     const today = todaySGT();
     const upcoming = SINGAPORE_PUBLIC_HOLIDAYS
-      .filter((h) => h.date >= today)
+      .filter((h) => filterYear ? h.year === filterYear : h.date >= today)
       .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 5);
+      .slice(0, filterYear ? 20 : 5); // show all for a specific year, else next 5
 
     if (upcoming.length > 0) {
       const lines = upcoming.map((h) =>
@@ -235,22 +238,31 @@ export function solveChatLocally(
           ? `• ${h.date}：${h.nameZh || h.name}`
           : `• ${h.date}: ${h.name}`
       ).join('\n');
-      return isZh
-        ? `🇸🇬 新加坡即将到来的公共假期：\n${lines}`
-        : `🇸🇬 Upcoming Singapore Public Holidays:\n${lines}`;
+      const header = filterYear
+        ? (isZh ? `🇸🇬 ${filterYear}年新加坡公共假期：` : `🇸🇬 Singapore Public Holidays ${filterYear}:`)
+        : (isZh ? '🇸🇬 即将到来的新加坡公共假期：' : '🇸🇬 Upcoming Singapore Public Holidays:');
+      return `${header}\n${lines}`;
     }
-    return isZh ? '🇸🇬 暂无即将到来的公共假期数据。' : '🇸🇬 No upcoming public holidays found in the current data.';
+    return isZh ? '🇸🇬 暂无该年份的公共假期数据。' : '🇸🇬 No public holiday data found for that year.';
   }
 
   // 4. Casual chat / greetings — warm fallback
-  const casualGreetings = ['hi', 'hello', 'hey', 'how are you', 'good morning', 'good evening', 'good night',
-    'thanks', 'thank you', 'ok', 'okay', 'nice', 'cool', '你好', '早安', '晚安', '谢谢', '好的', '嗯'];
-  if (casualGreetings.some((g) => query === g || query.startsWith(g + ' ') || query.endsWith(' ' + g))) {
-    const greetings = [
-      isZh ? '您好！😊 有什么我可以帮您的吗？' : 'Hey there! 😊 How can I help you today?',
-      isZh ? '你好！有什么想了解的吗？' : 'Hello! What can I help you with?',
-      isZh ? '😊 有需要就说哦！' : '😊 Just let me know what you need!',
-    ];
+  const casualPatterns = [
+    'hi', 'hello', 'hey', 'how are you', 'good morning', 'good afternoon',
+    'good evening', 'good night', 'thanks', 'thank you', 'ok', 'okay',
+    'nice', 'cool', 'great', 'awesome', 'what can you do', 'help',
+    '你好', '早安', '晚安', '谢谢', '好的', '嗯', '帮我', '可以',
+  ];
+  const isCasual = casualPatterns.some((g) =>
+    query === g ||
+    query.startsWith(g) ||
+    query.endsWith(g) ||
+    query.length < 10
+  );
+  if (isCasual) {
+    const greetings = isZh
+      ? ['您好！😊 有什么我可以帮您的吗？', '你好！可以问我阿嬷的住处、俊杰的班次或新加坡公共假期 😊', '嗨！有需要就说哦 🌸']
+      : ['Hey there! 😊 Ask me about Ahma\'s rotation, JJ\'s shifts, or SG holidays!', 'Hello! How can I help you today? 🌸', 'Hi! I can help with Ahma\'s schedule, Jun Jie\'s shifts, or upcoming holidays 😊'];
     return greetings[Math.floor(Math.random() * greetings.length)];
   }
 

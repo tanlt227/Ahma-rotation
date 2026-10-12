@@ -96,8 +96,10 @@ export const EventModal: React.FC<EventModalProps> = ({
       });
       if (res.ok) {
         const data = await res.json();
-        titleEn = data.en !== titleText ? data.en : undefined;
-        titleZh = data.zh !== titleText ? data.zh : undefined;
+        // Always store translated versions — even if same as original,
+        // they confirm the event has been processed for both languages
+        titleEn = data.en || titleText;
+        titleZh = data.zh || titleText;
         notesEn = data.notesEn || undefined;
         notesZh = data.notesZh || undefined;
       }

@@ -100,11 +100,22 @@ function getJunjieShift(dateStr: string) {
 // Inline date parser — mirrored from src/data/chatbotSolver.ts
 // ---------------------------------------------------------------------------
 
+function todaySGT(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
+}
+
+function addDaysSGT(n: number): string {
+  return new Date(Date.now() + (8 * 60 * 60 * 1000) + (n * 86400000)).toISOString().split('T')[0];
+}
+
 function extractDate(message: string): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = todaySGT();
   const q = message.toLowerCase();
 
-  if (q.includes('today') || q.includes('今天')) return today;
+  if (q.includes('today') || q.includes('今天') || q.includes('今日')) return today;
+  if (q.includes('tomorrow') || q.includes('明天') || q.includes('明日')) return addDaysSGT(1);
+  if (q.includes('day after tomorrow') || q.includes('后天')) return addDaysSGT(2);
+  if (q.includes('next week') || q.includes('下周')) return addDaysSGT(7);
 
   const isoMatch = message.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (isoMatch) {
@@ -334,7 +345,7 @@ Rules:
 - memberId: "all" for whole family; "junjie" for Jun Jie/俊杰; "grandma" for Ahma/阿嬷; "layting" for Lay Ting/丽婷; default "all".
 - category: trips/holidays/staycations → "holiday_plan"; family meals/gatherings → "family_gathering"; doctor/checkup → "medical"; leave/MC → "leave"; else → "general".
 
-Today is ${new Date().toISOString().split('T')[0]}.
+Today is ${todaySGT()}.
 Message: "${message}"`;
 
   let intent = 'query';
