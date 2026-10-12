@@ -564,7 +564,7 @@ Message: "${message}"`;
 
     try {
       const intentRes = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts: [{ text: intentPrompt }] }],
       });
       const raw = intentRes.text?.trim() ?? '';
@@ -614,7 +614,7 @@ When answering about events or plans, translate event titles and details into Ch
 Answer kindly in ${isZh ? 'Chinese / 简体中文' : 'English'}.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: [
         {
           role: 'user',

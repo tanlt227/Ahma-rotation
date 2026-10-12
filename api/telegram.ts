@@ -353,7 +353,7 @@ Message: "${message}"`;
 
   try {
     const intentRes = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: [{ role: 'user', parts: [{ text: intentPrompt }] }],
     });
     const raw = intentRes.text?.trim() ?? '';
@@ -431,7 +431,7 @@ For casual chat, just be natural and warm. For calendar questions, be accurate a
 Answer in ${language === 'zh' ? 'Chinese (中文)' : 'English'}. Plain text only, no Markdown.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nQuestion: ${message}` }] }],
   });
   return response.text?.trim() ?? '';
