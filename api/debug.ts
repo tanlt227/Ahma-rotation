@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const groq = new Groq({ apiKey: groqKey });
     const completion = await groq.chat.completions.create({
-      model: 'qwen/qwen3.8-27b',
+      model: 'llama-3.1-8b-instant',
       messages: [{ role: 'user', content: 'Reply with exactly: GROQ_OK' }],
       max_tokens: 16,
     });
