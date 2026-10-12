@@ -353,7 +353,7 @@ Message: "${message}"`;
 
   try {
     const intentCompletion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'qwen/qwen3.8-27b',
       messages: [{ role: 'user', content: intentPrompt }],
       temperature: 0.1,
       max_tokens: 256,
@@ -433,7 +433,7 @@ For casual chat, just be natural and warm. For calendar questions, be accurate a
 Answer in ${language === 'zh' ? 'Chinese (中文)' : 'English'}. Plain text only, no Markdown.`;
 
   const completion = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+    model: 'qwen/qwen3.8-27b',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user',   content: message },

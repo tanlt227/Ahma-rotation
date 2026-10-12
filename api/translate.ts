@@ -37,7 +37,7 @@ JSON schema (respond with exactly this):
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const completion = await groq.chat.completions.create({
-          model: 'llama-3.3-70b-versatile',
+          model: 'qwen/qwen3.8-27b',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.3,
           max_tokens: 256,

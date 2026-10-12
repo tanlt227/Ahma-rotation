@@ -186,7 +186,7 @@ async function callGroq(groq: Groq, messages: Groq.Chat.ChatCompletionMessagePar
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const completion = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
+        model: 'qwen/qwen3.8-27b',
         messages,
         temperature: 0.7,
         max_tokens: 512,
