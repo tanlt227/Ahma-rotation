@@ -357,6 +357,8 @@ Message: "${message}"`;
       messages: [{ role: 'user', content: intentPrompt }],
       temperature: 0.1,
       max_tokens: 256,
+      // @ts-ignore
+      reasoning_effort: 'none',
     });
     const raw = intentCompletion.choices[0]?.message?.content?.trim() ?? '';
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -440,6 +442,8 @@ Answer in ${language === 'zh' ? 'Chinese (中文)' : 'English'}. Plain text only
     ],
     temperature: 0.7,
     max_tokens: 512,
+    // @ts-ignore
+    reasoning_effort: 'none',
   });
   return completion.choices[0]?.message?.content?.trim() ?? '';
 }

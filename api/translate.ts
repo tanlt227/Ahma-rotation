@@ -41,6 +41,8 @@ JSON schema (respond with exactly this):
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.3,
           max_tokens: 256,
+          // @ts-ignore
+          reasoning_effort: 'none',
         });
 
         const raw = completion.choices[0]?.message?.content?.trim() ?? '';

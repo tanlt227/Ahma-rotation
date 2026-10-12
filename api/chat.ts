@@ -243,6 +243,8 @@ async function callGroq(groq: Groq, messages: Groq.Chat.ChatCompletionMessagePar
         messages,
         temperature: 0.7,
         max_tokens: 512,
+        // @ts-ignore — disable qwen reasoning mode so it uses injected data directly
+        reasoning_effort: 'none',
       });
       return completion.choices[0]?.message?.content?.trim() ?? '';
     } catch (err: any) {
@@ -277,6 +279,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const lang = detectLanguage(message);
   const today = todaySGT();
+  const ahmaToday = getAhmaInfo(today);
+  const nextKC = nextAhmaVisit(today, 'KC');
+  const nextKG = nextAhmaVisit(today, 'KG');
+  const nextKB = nextAhmaVisit(today, 'KB');
   const calendarContext = buildCalendarContext(today);
   const liveEvents = await fetchLiveEvents();
   const apiKey = process.env.GROQ_API_KEY;
@@ -285,27 +291,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const groq = new Groq({ apiKey });
 
-      const systemPrompt = `You are Ahma Bot 🌸 — a warm, cheerful assistant for a Singapore Chinese family's "Ahma's Rotation" app. You're like a trusted family member: friendly, helpful, and happy to chat about anything — food, daily life, feelings, plans, or just casual conversation.
+      const systemPrompt = `TODAY IS ${today} (Singapore Time, SGT UTC+8). Use this as the current date for ALL answers.
 
-CRITICAL: Always respond in the EXACT SAME LANGUAGE as the user's message.
-- English message → English response
-- Chinese/中文 message → Chinese response
-Never switch languages unless explicitly asked.
+You are Ahma Bot 🌸 — a warm family assistant for a Singapore Chinese family. You are friendly and happy to chat about anything.
 
+LANGUAGE RULE: Always reply in the SAME language as the user's message. English → English. Chinese → Chinese.
+
+CRITICAL — USE ONLY THE DATA BELOW, DO NOT RECALCULATE:
 ${calendarContext}
 
-FAMILY CALENDAR EVENTS (upcoming):
+FAMILY CALENDAR EVENTS:
 ${liveEvents}
 
-KEY RULES:
-- KC = Kay Cheow = Dad's place (爸爸家) — all three mean the same place
-- When asked "when is Ahma coming over next" or "when is Ahma next at KC/KG/KB" — USE THE EXACT DATES from "USE THESE EXACT DATES" above. Do NOT recalculate.
-- When asked about today's/tomorrow's shift — use the Next 7 days table above
-- For CNY questions — use the CNY special stays table above
-- For family events/plans — refer to FAMILY CALENDAR EVENTS above
-- For casual chat — just be warm and natural, no calendar needed
+ANSWER RULES:
+- "When is Ahma coming over / next at KC / Dad's place" → answer is: ${nextKC.date} (in ${nextKC.daysAway} days from today ${today})
+- "When is Ahma next at KG" → answer is: ${nextKG.date} (in ${nextKG.daysAway} days)
+- "When is Ahma next at KB" → answer is: ${nextKB.date} (in ${nextKB.daysAway} days)
+- "Where is Ahma today/now" → she is at ${ahmaToday.code} (${LOCATION_NAMES[ahmaToday.code]?.en}), Day ${ahmaToday.dayInStay}/${GRANDMA_DAYS}
+- "Where is Ahma tomorrow" → check the Next 7 days table above for ${addDaysToDate(today, 1)}
+- "JJ shift today/tomorrow" → check the Next 7 days table above
+- For CNY questions → use the CNY special stays table above
+- For family events/plans → use FAMILY CALENDAR EVENTS above
+- For casual chat → just chat naturally, no calendar needed
 
-STYLE: Conversational, like texting a family member. Direct and specific with dates. 2-4 sentences max.`;
+Keep answers short and direct (2-3 sentences). No bullet lists unless asking for a schedule.`;
 
       const reply = await callGroq(groq, [
         { role: 'system', content: systemPrompt },
