@@ -163,19 +163,72 @@ function buildCalendarContext(today: string): string {
 
   return `=== LIVE CALENDAR DATA (Singapore Time) ===
 Today: ${today}
-Ahma: ${loc.en} (${ahma.code}), Day ${ahma.dayInStay}/${GRANDMA_DAYS}, ${ahma.daysLeft} days left then → ${LOCATION_NAMES[ahma.nextCode]?.en ?? ahma.nextCode} on ${ahma.nextDate}
-Jun Jie today: ${jj.time ? `${jj.name} (${jj.time})` : jj.name} (Week ${jj.week}/3)
-Next KC visit: ${nextKC.date} (in ${nextKC.daysAway} days)
-Next KG visit: ${nextKG.date} (in ${nextKG.daysAway} days)
-Next KB visit: ${nextKB.date} (in ${nextKB.daysAway} days)
+Ahma NOW: ${loc.en} (${ahma.code}), Day ${ahma.dayInStay}/${GRANDMA_DAYS}, ${ahma.daysLeft} days remaining, then moves to ${LOCATION_NAMES[ahma.nextCode]?.en ?? ahma.nextCode} (${ahma.nextCode}) on ${ahma.nextDate}
+Jun Jie TODAY: ${jj.time ? `${jj.name} (${jj.time})` : jj.name} (Week ${jj.week}/3)
+
+USE THESE EXACT DATES (do not calculate yourself):
+  Next time Ahma arrives at KC (Kay Cheow/Dad's): ${nextKC.date} — that is in ${nextKC.daysAway} days
+  Next time Ahma arrives at KG (Kay Guan): ${nextKG.date} — that is in ${nextKG.daysAway} days
+  Next time Ahma arrives at KB (Kay Boon): ${nextKB.date} — that is in ${nextKB.daysAway} days
 Next public holiday: ${nextHoliday}
 
-Next 7 days:
+Next 7 days schedule:
 ${weekSnap}
 
-CNY special stays (Eve 5pm → Day 2 8pm):
+CNY special stays (Ahma stays Eve 5pm → Day 2 8pm at):
 ${cnySummary}
 ===========================================`;
+}
+
+// ---------------------------------------------------------------------------
+// Fetch live events from GitHub state
+// ---------------------------------------------------------------------------
+
+async function fetchLiveEvents(): Promise<string> {
+  const token = process.env.GITHUB_TOKEN;
+  const repo  = process.env.GITHUB_REPO;
+  const path  = process.env.GITHUB_PATH ?? 'data/calendar-data.json';
+
+  if (!token || !repo) return '(calendar events not available)';
+
+  try {
+    const url = `https://api.github.com/repos/${repo}/contents/${path}`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    });
+    if (!res.ok) return '(could not fetch calendar events)';
+
+    const file = await res.json() as { content: string };
+    const state = JSON.parse(Buffer.from(file.content, 'base64').toString('utf-8'));
+    const events = state.events ?? [];
+
+    if (events.length === 0) return '(no family events saved)';
+
+    const today = todaySGT();
+    // Show upcoming events within 90 days, sorted by date
+    const upcoming = events
+      .filter((e: any) => (e.endDate ?? e.startDate) >= today)
+      .sort((a: any, b: any) => a.startDate.localeCompare(b.startDate))
+      .slice(0, 15)
+      .map((e: any) => {
+        const dateRange = e.endDate && e.endDate !== e.startDate
+          ? `${e.startDate} to ${e.endDate}` : e.startDate;
+        const title = e.titleEn || e.title;
+        const titleZh = e.titleZh ? ` (${e.titleZh})` : '';
+        const loc = e.location ? ` @ ${e.location}` : '';
+        const time = e.time ? ` ${e.time}` : '';
+        return `  • ${dateRange}${time}: ${title}${titleZh}${loc} [${e.category}]`;
+      })
+      .join('\n');
+
+    return upcoming || '(no upcoming family events)';
+  } catch {
+    return '(could not load calendar events)';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -225,6 +278,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const lang = detectLanguage(message);
   const today = todaySGT();
   const calendarContext = buildCalendarContext(today);
+  const liveEvents = await fetchLiveEvents();
   const apiKey = process.env.GROQ_API_KEY;
 
   if (apiKey) {
@@ -240,17 +294,18 @@ Never switch languages unless explicitly asked.
 
 ${calendarContext}
 
-KEY FACTS:
-- KC = Kay Cheow = Dad's place (爸爸家) — all three mean the same place
-- Ahma rotates KC → KG → KB, 14 days each, anchor 7 May 2026 at KC
-- Jun Jie (JJ) has a 3-week repeating shift roster anchored Mon 15 Jun 2026
-- For "where is Ahma tomorrow/next week" — check the Next 7 days table above
-- For "when is Ahma next at KC/KG/KB" — use the Next KC/KG/KB visit dates above
-- For "where is Ahma during CNY [year]" — use the CNY special stays table above
-- For "2027 public holidays" or similar — list the SG public holidays for that year
-- For casual chat — just be warm and natural
+FAMILY CALENDAR EVENTS (upcoming):
+${liveEvents}
 
-STYLE: Conversational, like texting a family member. Direct and specific. 2-4 sentences max.`;
+KEY RULES:
+- KC = Kay Cheow = Dad's place (爸爸家) — all three mean the same place
+- When asked "when is Ahma coming over next" or "when is Ahma next at KC/KG/KB" — USE THE EXACT DATES from "USE THESE EXACT DATES" above. Do NOT recalculate.
+- When asked about today's/tomorrow's shift — use the Next 7 days table above
+- For CNY questions — use the CNY special stays table above
+- For family events/plans — refer to FAMILY CALENDAR EVENTS above
+- For casual chat — just be warm and natural, no calendar needed
+
+STYLE: Conversational, like texting a family member. Direct and specific with dates. 2-4 sentences max.`;
 
       const reply = await callGroq(groq, [
         { role: 'system', content: systemPrompt },
