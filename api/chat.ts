@@ -81,12 +81,16 @@ function daysBetween(a: string, b: string): number {
 
 function addDays(dateStr: string, n: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().split('T')[0];
+  // Use UTC arithmetic to avoid DST shifts
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return dt.toISOString().split('T')[0];
 }
 
 function formatDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-SG', {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
+  });
 }
 
 function getAhmaInfo(dateStr: string) {
@@ -167,8 +171,10 @@ function buildCalendarContext(today: string): string {
     if (SG_PUBLIC_HOLIDAYS[d]) { nextHoliday = `${d} — ${SG_PUBLIC_HOLIDAYS[d]} (in ${i} days)`; break; }
   }
 
+  const [ty, tm, td] = today.split('-').map(Number);
+  const todayWeekday = new Date(Date.UTC(ty, tm - 1, td)).toLocaleDateString('en-SG', { weekday: 'long', timeZone: 'UTC' });
   return `=== LIVE CALENDAR DATA ===
-Today: ${today} (${new Date().toLocaleDateString('en-SG', { weekday: 'long' })})
+Today: ${today} (${todayWeekday})
 
 AHMA NOW: ${locToday.en} (${ahmaToday.code}), Day ${ahmaToday.dayInStay} of ${GRANDMA_DAYS}
   ${ahmaToday.daysLeft} days left, then → ${LOCATION_NAMES[ahmaToday.nextCode]?.en ?? ahmaToday.nextCode} (${ahmaToday.nextCode}) on ${ahmaToday.nextDate}
@@ -210,7 +216,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const lang = detectLanguage(message);
-  const today = new Date().toISOString().split('T')[0];
+  // Use Singapore Time (UTC+8) for today's date
+  const now = new Date();
+  const today = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
   const calendarContext = buildCalendarContext(today);
 
   const apiKey = process.env.GEMINI_API_KEY;

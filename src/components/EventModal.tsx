@@ -78,46 +78,49 @@ export const EventModal: React.FC<EventModalProps> = ({
     e.preventDefault();
     if (!title.trim() || !startDate) return;
 
-    // Build base event first so it saves instantly (optimistic)
     const stableId = editingEvent?.id || `ev-${Date.now()}`;
-    const baseEvent = {
+    const titleText = title.trim();
+    const notesText = notes.trim() || undefined;
+
+    // Translate first (before saving) so one write contains everything
+    let titleEn: string | undefined;
+    let titleZh: string | undefined;
+    let notesEn: string | undefined;
+    let notesZh: string | undefined;
+
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: titleText, notes: notesText }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        titleEn = data.en !== titleText ? data.en : undefined;
+        titleZh = data.zh !== titleText ? data.zh : undefined;
+        notesEn = data.notesEn || undefined;
+        notesZh = data.notesZh || undefined;
+      }
+    } catch {
+      // Translation failed — save without bilingual fields
+    }
+
+    await addOrUpdateEvent({
       id: stableId,
-      title: title.trim(),
+      title: titleText,
+      titleEn,
+      titleZh,
       startDate,
       endDate: endDate || undefined,
       category,
       memberId,
       time: time.trim() || undefined,
       location: location.trim() || undefined,
-      notes: notes.trim() || undefined,
-    };
-
-    // Save immediately — don't block on translation
-    await addOrUpdateEvent(baseEvent);
+      notes: notesText,
+      notesEn,
+      notesZh,
+    });
     onClose();
-
-    // Translate in background and update with bilingual versions
-    try {
-      const res = await fetch('/api/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: title.trim(), notes: notes.trim() || undefined }),
-      });
-      if (res.ok) {
-        const { en, zh, notesEn, notesZh } = await res.json();
-        if (en !== title.trim() || zh !== title.trim()) {
-          await addOrUpdateEvent({
-            ...baseEvent,
-            titleEn: en,
-            titleZh: zh,
-            notesEn: notesEn || undefined,
-            notesZh: notesZh || undefined,
-          });
-        }
-      }
-    } catch {
-      // Translation failed silently — original title stays visible
-    }
   };
 
   const handleDelete = async () => {

@@ -177,8 +177,25 @@ export function getCategoryLabel(category: string, lang: Language): string {
 }
 
 // ---------------------------------------------------------------------------
-// Bilingual event title/notes helpers
+// Timezone helper — Singapore Time (UTC+8)
 // ---------------------------------------------------------------------------
+
+/** Returns today's date string in SGT (UTC+8) as YYYY-MM-DD */
+export function todaySGT(): string {
+  const now = new Date();
+  // Offset to SGT: UTC+8 = +480 minutes
+  const sgt = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  return sgt.toISOString().split('T')[0];
+}
+
+/** Returns a date offset by N days from today in SGT */
+export function addDaysSGT(n: number): string {
+  const now = new Date();
+  const sgt = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  sgt.setUTCDate(sgt.getUTCDate() + n);
+  return sgt.toISOString().split('T')[0];
+}
+
 
 export interface BilingualEvent {
   title: string;

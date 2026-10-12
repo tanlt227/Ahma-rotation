@@ -151,24 +151,46 @@ async function pushToGitHub(state: AppSyncState, sha: string | null): Promise<vo
   const { token, repo, path } = ghConfig();
   const url = apiUrl(repo, path);
 
-  const content = Buffer.from(JSON.stringify(state, null, 2)).toString('base64');
-  const body: Record<string, unknown> = {
-    message: `chore: update calendar state [${new Date().toISOString()}]`,
-    content,
-    committer: { name: 'Ahma Bot', email: 'ahma-bot@users.noreply.github.com' },
-  };
-  if (sha) body.sha = sha;   // required for updates; omit for creates
+  const MAX_RETRIES = 3;
+  let currentSha = sha;
 
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: authHeaders(token),
-    body: JSON.stringify(body),
-  });
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const content = Buffer.from(JSON.stringify(state, null, 2)).toString('base64');
+    const body: Record<string, unknown> = {
+      message: `chore: update calendar state [${new Date().toISOString()}]`,
+      content,
+      committer: { name: 'Ahma Bot', email: 'ahma-bot@users.noreply.github.com' },
+    };
+    if (currentSha) body.sha = currentSha;
 
-  if (!res.ok) {
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify(body),
+    });
+
+    if (res.ok) return;
+
+    if (res.status === 409 || res.status === 422) {
+      // SHA conflict — re-fetch the latest SHA and retry
+      console.warn(`[github] SHA conflict on attempt ${attempt + 1}, re-fetching SHA...`);
+      try {
+        const latest = await fetch(url, { headers: authHeaders(token) });
+        if (latest.ok) {
+          const file: GhFileResponse = await latest.json();
+          currentSha = file.sha;
+        }
+      } catch {}
+      // Brief backoff before retry: 200ms, 400ms, 800ms
+      await new Promise((r) => setTimeout(r, 200 * Math.pow(2, attempt)));
+      continue;
+    }
+
     const err = await res.text();
     throw new Error(`[github] PUT ${url} → ${res.status}: ${err}`);
   }
+
+  throw new Error(`[github] Failed to push after ${MAX_RETRIES} attempts (persistent SHA conflict)`);
 }
 
 // ─── public API (same shape as the old KV version) ───────────────────────────

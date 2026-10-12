@@ -1,7 +1,7 @@
 import { CalendarAppSettings, DayOverride, ShiftRosterWeek } from '../types';
 import { getGrandmaLocation, getScheduledJunjieShift, getAhmaLocationName } from './schedule';
 import { SINGAPORE_PUBLIC_HOLIDAYS, getPublicHoliday } from './holidays';
-import { getShiftLabel } from './i18n';
+import { getShiftLabel, todaySGT, addDaysSGT } from './i18n';
 
 export function solveChatLocally(
   message: string,
@@ -60,29 +60,23 @@ export function solveChatLocally(
 
   // If no date found but says "today" or "今天"
   if (!targetDate) {
-    if (query.includes('today') || query.includes('今天')) {
-      const today = new Date();
-      targetDate = today.toISOString().split('T')[0];
+    if (query.includes('today') || query.includes('今天') || query.includes('今日')) {
+      targetDate = todaySGT();
     } else if (query.includes('tomorrow') || query.includes('明天') || query.includes('明日')) {
-      const d = new Date(); d.setDate(d.getDate() + 1);
-      targetDate = d.toISOString().split('T')[0];
+      targetDate = addDaysSGT(1);
     } else if (query.includes('day after tomorrow') || query.includes('后天')) {
-      const d = new Date(); d.setDate(d.getDate() + 2);
-      targetDate = d.toISOString().split('T')[0];
+      targetDate = addDaysSGT(2);
     } else if (query.includes('next week') || query.includes('下周') || query.includes('下个星期')) {
-      const d = new Date(); d.setDate(d.getDate() + 7);
-      targetDate = d.toISOString().split('T')[0];
+      targetDate = addDaysSGT(7);
     } else if (query.includes('this week') || query.includes('本周') || query.includes('这周')) {
-      const today = new Date();
-      targetDate = today.toISOString().split('T')[0];
+      targetDate = todaySGT();
     } else if (query.includes('next year') || query.includes('明年')) {
-      const d = new Date(); d.setFullYear(d.getFullYear() + 1);
-      targetDate = d.toISOString().split('T')[0];
+      targetDate = addDaysSGT(365);
     } else if (query.includes('this weekend') || query.includes('这个周末') || query.includes('本周末')) {
       const d = new Date();
-      const daysToSat = (6 - d.getDay() + 7) % 7 || 7;
-      d.setDate(d.getDate() + daysToSat);
-      targetDate = d.toISOString().split('T')[0];
+      const sgt = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+      const daysToSat = (6 - sgt.getUTCDay() + 7) % 7 || 7;
+      targetDate = addDaysSGT(daysToSat);
     }
   }
 
@@ -114,19 +108,17 @@ export function solveChatLocally(
         query.includes('kg') || query.includes('kay guan') || query.includes('启源') ? 'KG' :
         query.includes('kb') || query.includes('kay boon') || query.includes('启文') ? 'KB' : null;
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = todaySGT();
       const currentInfo = getGrandmaLocation(today, settings.grandmaAnchorDate, overrides, settings.grandmaCycleDays);
 
       if (targetCode) {
         // Find next arrival (dayInStay === 1) at targetCode
         let nextDate = '';
         let daysAway = 0;
-        for (let i = 0; i <= 42 * 3; i++) {
-          const checkD = new Date(today);
-          checkD.setDate(checkD.getDate() + i);
-          const ds = checkD.toISOString().split('T')[0];
+        for (let i = 1; i <= 42 * 3; i++) {
+          const ds = addDaysSGT(i);
           const info = getGrandmaLocation(ds, settings.grandmaAnchorDate, overrides, settings.grandmaCycleDays);
-          if (info.locationCode === targetCode && info.dayInCurrentStay === 1 && i > 0) {
+          if (info.locationCode === targetCode && info.dayInCurrentStay === 1) {
             nextDate = ds; daysAway = i; break;
           }
         }
@@ -144,7 +136,7 @@ export function solveChatLocally(
       }
     }
 
-    const checkDate = targetDate || new Date().toISOString().split('T')[0];
+    const checkDate = targetDate || todaySGT();
     const grandma = getGrandmaLocation(checkDate, settings.grandmaAnchorDate, overrides, settings.grandmaCycleDays);
     const locNameZh = getAhmaLocationName(grandma.locationCode, 'zh');
     const locNameEn = getAhmaLocationName(grandma.locationCode, 'en');
@@ -184,7 +176,7 @@ export function solveChatLocally(
     query.includes('上班') ||
     query.includes('工作')
   ) {
-    const checkDate = targetDate || '2026-06-15';
+    const checkDate = targetDate || todaySGT();
     const junjie = getScheduledJunjieShift(checkDate, settings.junjieAnchorDate, overrides, rosterWeeks);
     const shiftLabelEn = junjie.shift.time && junjie.shift.time !== 'Off' && junjie.shift.time !== 'Rest' && junjie.shift.time !== 'Leave'
       ? `${junjie.shift.name} (${junjie.shift.time})` : junjie.shift.name;
@@ -231,7 +223,7 @@ export function solveChatLocally(
     }
 
     // Find the next upcoming holiday from today
-    const today = new Date().toISOString().split('T')[0];
+    const today = todaySGT();
     const upcoming = SINGAPORE_PUBLIC_HOLIDAYS
       .filter((h) => h.date >= today)
       .sort((a, b) => a.date.localeCompare(b.date))
