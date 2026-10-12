@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import Groq from 'groq-sdk';
 
 // ---------------------------------------------------------------------------
-// Schedule constants (mirrored from src/data/schedule.ts)
+// Schedule constants
 // ---------------------------------------------------------------------------
 
 const GRANDMA_ANCHOR = '2026-05-07';
@@ -38,70 +38,66 @@ const SG_PUBLIC_HOLIDAYS: Record<string, string> = {
   '2026-11-08': 'Deepavali',
   '2026-11-09': 'Deepavali (In-Lieu)',
   '2026-12-25': 'Christmas Day',
+  '2027-01-01': "New Year's Day",
+  '2027-02-06': 'Chinese New Year (Day 1)',
+  '2027-02-07': 'Chinese New Year (Day 2)',
+  '2027-03-10': 'Hari Raya Puasa',
+  '2027-03-26': 'Good Friday',
+  '2027-05-01': 'Labour Day',
+  '2027-05-16': 'Hari Raya Haji',
+  '2027-05-20': 'Vesak Day',
+  '2027-08-09': 'National Day',
+  '2027-10-29': 'Deepavali',
+  '2027-12-25': 'Christmas Day',
 };
 
-// Jun Jie 3-week roster anchored Mon 15 Jun 2026
-const JUNJIE_ANCHOR = '2026-06-15';
 const JUNJIE_ROSTER: { name: string; time: string }[] = [
-  // Week 1
-  { name: 'Night',       time: '2200-0900' }, // Mon
-  { name: 'Night',       time: '2200-0900' }, // Tue
-  { name: 'OFF Day',     time: ''          }, // Wed
-  { name: 'REST DAY',    time: ''          }, // Thu
-  { name: 'Morning',     time: '0630-1530' }, // Fri
-  { name: 'Morning',     time: '0630-1530' }, // Sat
-  { name: 'Morning',     time: '0630-1530' }, // Sun
-  // Week 2
-  { name: 'Morning',     time: '0630-1530' }, // Mon
-  { name: 'OFF Day',     time: ''          }, // Tue
-  { name: 'Afternoon 1', time: '1400-0100' }, // Wed
-  { name: 'Afternoon 1', time: '1400-0100' }, // Thu
-  { name: 'Afternoon 2', time: '1500-0200' }, // Fri
-  { name: 'Afternoon 2', time: '1500-0200' }, // Sat
-  { name: 'REST DAY',    time: ''          }, // Sun
-  // Week 3
-  { name: 'OFF Day',     time: ''          }, // Mon
-  { name: 'Morning',     time: '0630-1530' }, // Tue
-  { name: 'Morning',     time: '0630-1530' }, // Wed
-  { name: 'Morning',     time: '0630-1530' }, // Thu
-  { name: 'REST DAY',    time: ''          }, // Fri
-  { name: 'Afternoon 3', time: '1600-0100' }, // Sat
-  { name: 'Afternoon 3', time: '1600-0100' }, // Sun
+  { name: 'Night',       time: '2200-0900' },
+  { name: 'Night',       time: '2200-0900' },
+  { name: 'OFF Day',     time: ''          },
+  { name: 'REST DAY',    time: ''          },
+  { name: 'Morning',     time: '0630-1530' },
+  { name: 'Morning',     time: '0630-1530' },
+  { name: 'Morning',     time: '0630-1530' },
+  { name: 'Morning',     time: '0630-1530' },
+  { name: 'OFF Day',     time: ''          },
+  { name: 'Afternoon 1', time: '1400-0100' },
+  { name: 'Afternoon 1', time: '1400-0100' },
+  { name: 'Afternoon 2', time: '1500-0200' },
+  { name: 'Afternoon 2', time: '1500-0200' },
+  { name: 'REST DAY',    time: ''          },
+  { name: 'OFF Day',     time: ''          },
+  { name: 'Morning',     time: '0630-1530' },
+  { name: 'Morning',     time: '0630-1530' },
+  { name: 'Morning',     time: '0630-1530' },
+  { name: 'REST DAY',    time: ''          },
+  { name: 'Afternoon 3', time: '1600-0100' },
+  { name: 'Afternoon 3', time: '1600-0100' },
 ];
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function daysBetween(a: string, b: string): number {
-  const [yA, mA, dA] = a.split('-').map(Number);
-  const [yB, mB, dB] = b.split('-').map(Number);
-  return Math.round((Date.UTC(yA, mA - 1, dA) - Date.UTC(yB, mB - 1, dB)) / 86400000);
+function todaySGT(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
 }
 
-function addDays(dateStr: string, n: number): string {
+function addDaysToDate(dateStr: string, n: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);
-  // Use UTC arithmetic to avoid DST shifts
-  const dt = new Date(Date.UTC(y, m - 1, d + n));
-  return dt.toISOString().split('T')[0];
-}
-
-function formatDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-SG', {
-    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
-  });
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().split('T')[0];
 }
 
 function getAhmaInfo(dateStr: string) {
-  // Check CNY override first
   const year = parseInt(dateStr.split('-')[0]);
   const cny = CNY_SCHEDULE[year];
   if (cny && (dateStr === cny.eve || dateStr === cny.day1 || dateStr === cny.day2)) {
     const stage = dateStr === cny.eve ? 'Eve' : dateStr === cny.day1 ? 'Day 1' : 'Day 2';
-    return { code: cny.code, dayInStay: 1, daysLeft: 0, nextCode: 'Regular rotation', nextDate: addDays(dateStr, 1), isCny: true, cnyStage: stage };
+    return { code: cny.code, dayInStay: 1, daysLeft: 0, nextCode: 'resumes rotation', nextDate: addDaysToDate(dateStr, 1), isCny: true, cnyStage: stage };
   }
-  const diff = daysBetween(dateStr, GRANDMA_ANCHOR);
+  const [yA, mA, dA] = dateStr.split('-').map(Number);
+  const [yB, mB, dB] = GRANDMA_ANCHOR.split('-').map(Number);
+  const diff = Math.round((Date.UTC(yA, mA - 1, dA) - Date.UTC(yB, mB - 1, dB)) / 86400000);
   const total = GRANDMA_SEQUENCE.length * GRANDMA_DAYS;
   const cycleDay = ((diff % total) + total) % total;
   const locIdx = Math.floor(cycleDay / GRANDMA_DAYS);
@@ -109,20 +105,21 @@ function getAhmaInfo(dateStr: string) {
   const dayInStay = (cycleDay % GRANDMA_DAYS) + 1;
   const daysLeft = GRANDMA_DAYS - dayInStay;
   const nextCode = GRANDMA_SEQUENCE[(locIdx + 1) % GRANDMA_SEQUENCE.length];
-  const nextDate = addDays(dateStr, daysLeft + 1);
+  const nextDate = addDaysToDate(dateStr, daysLeft + 1);
   return { code, dayInStay, daysLeft, nextCode, nextDate, isCny: false, cnyStage: '' };
 }
 
 function getJunjieShift(dateStr: string) {
-  const diff = daysBetween(dateStr, JUNJIE_ANCHOR);
+  const [yA, mA, dA] = '2026-06-15'.split('-').map(Number);
+  const [yB, mB, dB] = dateStr.split('-').map(Number);
+  const diff = Math.round((Date.UTC(yB, mB - 1, dB) - Date.UTC(yA, mA - 1, dA)) / 86400000);
   const idx = ((diff % 21) + 21) % 21;
-  const week = Math.floor(idx / 7) + 1;
-  return { ...JUNJIE_ROSTER[idx], week };
+  return { ...JUNJIE_ROSTER[idx], week: Math.floor(idx / 7) + 1 };
 }
 
-function nextAhmaVisit(fromDate: string, targetCode: string): { date: string; daysAway: number } {
-  for (let i = 1; i <= GRANDMA_DAYS * GRANDMA_SEQUENCE.length * 2; i++) {
-    const d = addDays(fromDate, i);
+function nextAhmaVisit(fromDate: string, targetCode: string) {
+  for (let i = 1; i <= 42 * 3; i++) {
+    const d = addDaysToDate(fromDate, i);
     const info = getAhmaInfo(d);
     if (info.code === targetCode && info.dayInStay === 1 && !info.isCny) {
       return { date: d, daysAway: i };
@@ -135,65 +132,78 @@ function detectLanguage(text: string): 'en' | 'zh' {
   return /[\u4e00-\u9fa5]/.test(text) ? 'zh' : 'en';
 }
 
-// ---------------------------------------------------------------------------
-// Build rich calendar context for Gemini
-// ---------------------------------------------------------------------------
-
 function buildCalendarContext(today: string): string {
-  const ahmaToday = getAhmaInfo(today);
-  const locToday = LOCATION_NAMES[ahmaToday.code] ?? { en: ahmaToday.code, zh: ahmaToday.code };
-  const junjieToday = getJunjieShift(today);
+  const ahma = getAhmaInfo(today);
+  const loc = LOCATION_NAMES[ahma.code] ?? { en: ahma.code, zh: ahma.code };
+  const jj = getJunjieShift(today);
 
   const nextKC = nextAhmaVisit(today, 'KC');
   const nextKG = nextAhmaVisit(today, 'KG');
   const nextKB = nextAhmaVisit(today, 'KB');
 
-  // Next 7 days snapshot
-  const weekSnapshot = Array.from({ length: 7 }, (_, i) => {
-    const d = addDays(today, i);
+  const weekSnap = Array.from({ length: 7 }, (_, i) => {
+    const d = addDaysToDate(today, i);
     const a = getAhmaInfo(d);
     const j = getJunjieShift(d);
-    const h = SG_PUBLIC_HOLIDAYS[d] ? ` 🇸🇬 ${SG_PUBLIC_HOLIDAYS[d]}` : '';
+    const h = SG_PUBLIC_HOLIDAYS[d] ? ` [PH: ${SG_PUBLIC_HOLIDAYS[d]}]` : '';
     const aName = LOCATION_NAMES[a.code]?.en ?? a.code;
     const jStr = j.time ? `${j.name} (${j.time})` : j.name;
-    return `  ${d}: Ahma@${aName}(Day${a.dayInCurrentStay??a.dayInStay}/${GRANDMA_DAYS})${a.isCny?` [CNY ${a.cnyStage}]`:''} | JJ:${jStr}${h}`;
+    return `  ${d}: Ahma@${aName}(Day${a.dayInStay}/${GRANDMA_DAYS})${a.isCny ? ` [CNY ${a.cnyStage}]` : ''} | JJ:${jStr}${h}`;
   }).join('\n');
 
-  // CNY summary for next few years
   const cnySummary = Object.entries(CNY_SCHEDULE)
-    .map(([yr, c]) => `  ${yr}: Eve=${c.eve}, Day1=${c.day1}, Day2=${c.day2} → ${LOCATION_NAMES[c.code]?.en} (${c.code})`)
+    .map(([yr, c]) => `  ${yr}: ${LOCATION_NAMES[c.code]?.en} (${c.code}), Eve=${c.eve}`)
     .join('\n');
 
-  // Next public holiday
-  let nextHoliday = '';
+  let nextHoliday = 'none found in data';
   for (let i = 0; i <= 365; i++) {
-    const d = addDays(today, i);
+    const d = addDaysToDate(today, i);
     if (SG_PUBLIC_HOLIDAYS[d]) { nextHoliday = `${d} — ${SG_PUBLIC_HOLIDAYS[d]} (in ${i} days)`; break; }
   }
 
-  const [ty, tm, td] = today.split('-').map(Number);
-  const todayWeekday = new Date(Date.UTC(ty, tm - 1, td)).toLocaleDateString('en-SG', { weekday: 'long', timeZone: 'UTC' });
-  return `=== LIVE CALENDAR DATA ===
-Today: ${today} (${todayWeekday})
+  return `=== LIVE CALENDAR DATA (Singapore Time) ===
+Today: ${today}
+Ahma: ${loc.en} (${ahma.code}), Day ${ahma.dayInStay}/${GRANDMA_DAYS}, ${ahma.daysLeft} days left then → ${LOCATION_NAMES[ahma.nextCode]?.en ?? ahma.nextCode} on ${ahma.nextDate}
+Jun Jie today: ${jj.time ? `${jj.name} (${jj.time})` : jj.name} (Week ${jj.week}/3)
+Next KC visit: ${nextKC.date} (in ${nextKC.daysAway} days)
+Next KG visit: ${nextKG.date} (in ${nextKG.daysAway} days)
+Next KB visit: ${nextKB.date} (in ${nextKB.daysAway} days)
+Next public holiday: ${nextHoliday}
 
-AHMA NOW: ${locToday.en} (${ahmaToday.code}), Day ${ahmaToday.dayInStay} of ${GRANDMA_DAYS}
-  ${ahmaToday.daysLeft} days left, then → ${LOCATION_NAMES[ahmaToday.nextCode]?.en ?? ahmaToday.nextCode} (${ahmaToday.nextCode}) on ${ahmaToday.nextDate}
+Next 7 days:
+${weekSnap}
 
-NEXT ARRIVALS (first day of each stay):
-  Next KC (${LOCATION_NAMES.KC.en}): ${nextKC.date} — ${formatDate(nextKC.date)} (in ${nextKC.daysAway} days)
-  Next KG (${LOCATION_NAMES.KG.en}): ${nextKG.date} — ${formatDate(nextKG.date)} (in ${nextKG.daysAway} days)
-  Next KB (${LOCATION_NAMES.KB.en}): ${nextKB.date} — ${formatDate(nextKB.date)} (in ${nextKB.daysAway} days)
-
-JUN JIE TODAY: ${junjieToday.time ? `${junjieToday.name} (${junjieToday.time})` : junjieToday.name} — Week ${junjieToday.week} of 3
-
-NEXT 7 DAYS:
-${weekSnapshot}
-
-CNY SPECIAL ARRANGEMENT (Eve 5pm → Day 2 8pm, Ahma stays at:):
+CNY special stays (Eve 5pm → Day 2 8pm):
 ${cnySummary}
+===========================================`;
+}
 
-NEXT PUBLIC HOLIDAY: ${nextHoliday}
-========================`;
+// ---------------------------------------------------------------------------
+// Groq call helper with retry
+// ---------------------------------------------------------------------------
+
+async function callGroq(groq: Groq, messages: Groq.Chat.ChatCompletionMessageParam[]): Promise<string> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const completion = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages,
+        temperature: 0.7,
+        max_tokens: 512,
+      });
+      return completion.choices[0]?.message?.content?.trim() ?? '';
+    } catch (err: any) {
+      const isRetryable = String(err?.message ?? err).includes('503') ||
+                          String(err?.message ?? err).includes('429') ||
+                          String(err?.message ?? err).includes('overloaded');
+      if (isRetryable && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  return '';
 }
 
 // ---------------------------------------------------------------------------
@@ -201,89 +211,55 @@ NEXT PUBLIC HOLIDAY: ${nextHoliday}
 // ---------------------------------------------------------------------------
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { message } = req.body || {};
   if (!message || typeof message !== 'string') {
-    return res.status(400).json({ error: 'Message is required' });
+    return res.status(400).json({ error: 'message is required' });
   }
 
   const lang = detectLanguage(message);
-  // Use Singapore Time (UTC+8) for today's date
-  const now = new Date();
-  const today = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const today = todaySGT();
   const calendarContext = buildCalendarContext(today);
-
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
 
   if (apiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      const groq = new Groq({ apiKey });
 
-      const systemPrompt = `You are Ahma Bot 🌸 — a warm, cheerful family assistant for a Singapore Chinese family's "Ahma's Rotation" app. You're like a trusted family member: friendly, helpful, and happy to chat about anything at all — food, daily life, feelings, plans, or just casual conversation.
+      const systemPrompt = `You are Ahma Bot 🌸 — a warm, cheerful assistant for a Singapore Chinese family's "Ahma's Rotation" app. You're like a trusted family member: friendly, helpful, and happy to chat about anything — food, daily life, feelings, plans, or just casual conversation.
 
-CRITICAL RULE: Always respond in the EXACT SAME LANGUAGE as the user's message.
-- English message → English response (even if the app is in Chinese mode)
-- Chinese message → Chinese response
-- Mixed → match the dominant language
+CRITICAL: Always respond in the EXACT SAME LANGUAGE as the user's message.
+- English message → English response
+- Chinese/中文 message → Chinese response
 Never switch languages unless explicitly asked.
 
 ${calendarContext}
 
-ROTATION RULES (use the live data above for calculations, not these rules directly):
-- Ahma rotates KC → KG → KB, 14 days each, starting 7 May 2026 at KC
-- KC = Kay Cheow = Dad's place (爸爸家). All three are the same: KC, Kay Cheow, Dad's place
-- CNY special: Ahma stays at the CNY location from Eve 5pm until Day 2 8pm
-- Jun Jie (JJ) 3-week roster: anchored Monday 15 Jun 2026 (see NEXT 7 DAYS for upcoming shifts)
+KEY FACTS:
+- KC = Kay Cheow = Dad's place (爸爸家) — all three mean the same place
+- Ahma rotates KC → KG → KB, 14 days each, anchor 7 May 2026 at KC
+- Jun Jie (JJ) has a 3-week repeating shift roster anchored Mon 15 Jun 2026
+- For "where is Ahma tomorrow/next week" — check the Next 7 days table above
+- For "when is Ahma next at KC/KG/KB" — use the Next KC/KG/KB visit dates above
+- For "where is Ahma during CNY [year]" — use the CNY special stays table above
+- For "2027 public holidays" or similar — list the SG public holidays for that year
+- For casual chat — just be warm and natural
 
-QUERY HANDLING — answer these naturally using the live data:
-- "where is Ahma" / "who has Ahma" → use AHMA NOW
-- "when is Ahma coming to KC/KG/KB" / "when is Ahma next at Dad's" → use NEXT ARRIVALS
-- "where is Ahma during CNY [year]" → use CNY SPECIAL ARRANGEMENT table
-- "is Ahma at KC this week" → check NEXT 7 DAYS
-- "when does Ahma move next" → use "days left" and nextDate from AHMA NOW
-- "what shift is JJ working" / "is JJ working tomorrow" → use JUN JIE TODAY or NEXT 7 DAYS
-- "any public holidays soon" / "is [date] a holiday" → use NEXT PUBLIC HOLIDAY
-- "what's happening this week" → summarise the NEXT 7 DAYS nicely
-- Casual chat (greetings, feelings, food, weather, anything) → just be warm and natural, no need to mention the calendar
+STYLE: Conversational, like texting a family member. Direct and specific. 2-4 sentences max.`;
 
-RESPONSE STYLE:
-- Be conversational and warm, like texting a family member
-- For calendar answers: be direct and specific (give the actual date, not just "in X days")
-- For casual chat: just chat naturally, keep it short and friendly
-- No markdown headers or bullet overload — plain flowing text is fine
-- Keep responses concise (2-4 sentences for most answers)`;
+      const reply = await callGroq(groq, [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: message },
+      ]);
 
-      // Retry up to 3 times on 503 (model overload)
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nUser: ${message}` }] }],
-          });
-          if (response.text?.trim()) {
-            return res.status(200).json({ reply: response.text.trim() });
-          }
-          break;
-        } catch (err: any) {
-          const is503 = String(err?.message ?? err).includes('503') || String(err?.message ?? err).includes('UNAVAILABLE');
-          if (is503 && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-            continue;
-          }
-          console.warn('[chat] Gemini failed:', err?.message ?? err);
-          break;
-        }
-      }
+      if (reply) return res.status(200).json({ reply });
     } catch (err: any) {
-      console.warn('[chat] Gemini setup failed:', err?.message ?? err);
+      console.warn('[chat] Groq failed:', err?.message ?? err);
     }
   }
 

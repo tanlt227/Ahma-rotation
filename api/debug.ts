@@ -1,45 +1,36 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import Groq from 'groq-sdk';
 
-/**
- * GET /api/debug
- * Diagnostic endpoint — shows env var status and tests Gemini connectivity.
- * Remove or protect this endpoint before going fully public.
- */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const geminiKey   = process.env.GEMINI_API_KEY;
+  const groqKey    = process.env.GROQ_API_KEY;
   const githubToken = process.env.GITHUB_TOKEN;
   const githubRepo  = process.env.GITHUB_REPO;
 
   const result: Record<string, unknown> = {
     env: {
-      GEMINI_API_KEY:  geminiKey  ? `set (ends ...${geminiKey.slice(-4)})`  : 'NOT SET ❌',
-      GITHUB_TOKEN:    githubToken ? `set (ends ...${githubToken.slice(-4)})` : 'NOT SET ❌',
-      GITHUB_REPO:     githubRepo  ?? 'NOT SET ❌',
+      GROQ_API_KEY:  groqKey     ? `set (ends ...${groqKey.slice(-4)})`     : 'NOT SET ❌',
+      GITHUB_TOKEN:  githubToken ? `set (ends ...${githubToken.slice(-4)})` : 'NOT SET ❌',
+      GITHUB_REPO:   githubRepo  ?? 'NOT SET ❌',
     },
-    gemini: null as unknown,
+    groq: null as unknown,
   };
 
-  if (!geminiKey) {
-    result.gemini = 'skipped — GEMINI_API_KEY not set';
+  if (!groqKey) {
+    result.groq = 'skipped — GROQ_API_KEY not set';
     return res.status(200).json(result);
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: geminiKey });
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: [{ role: 'user', parts: [{ text: 'Reply with exactly: GEMINI_OK' }] }],
+    const groq = new Groq({ apiKey: groqKey });
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: 'Reply with exactly: GROQ_OK' }],
+      max_tokens: 16,
     });
-    result.gemini = {
-      status: 'success ✅',
-      reply: response.text?.trim(),
-    };
+    const reply = completion.choices[0]?.message?.content?.trim();
+    result.groq = { status: 'success ✅', reply };
   } catch (err: any) {
-    result.gemini = {
-      status: 'failed ❌',
-      error: err?.message ?? String(err),
-    };
+    result.groq = { status: 'failed ❌', error: err?.message ?? String(err) };
   }
 
   return res.status(200).json(result);

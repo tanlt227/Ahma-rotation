@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import Groq from 'groq-sdk';
 
 // ---------------------------------------------------------------------------
 // Inline schedule logic — mirrored from src/data/schedule.ts
@@ -259,7 +259,7 @@ async function sendTelegramMessage(token: string, chatId: number, text: string) 
 }
 
 async function getAiReply(message: string, language: 'en' | 'zh', apiKey: string): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey });
+  const groq = new Groq({ apiKey });
   const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '');
 
   // -------------------------------------------------------------------------
@@ -352,11 +352,13 @@ Message: "${message}"`;
   let extractedEvent: any = null;
 
   try {
-    const intentRes = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: [{ role: 'user', parts: [{ text: intentPrompt }] }],
+    const intentCompletion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: intentPrompt }],
+      temperature: 0.1,
+      max_tokens: 256,
     });
-    const raw = intentRes.text?.trim() ?? '';
+    const raw = intentCompletion.choices[0]?.message?.content?.trim() ?? '';
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
@@ -430,11 +432,16 @@ When answering about events or plans, translate event titles and details into Ch
 For casual chat, just be natural and warm. For calendar questions, be accurate and concise.
 Answer in ${language === 'zh' ? 'Chinese (中文)' : 'English'}. Plain text only, no Markdown.`;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.8-flash',
-    contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nQuestion: ${message}` }] }],
+  const completion = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: message },
+    ],
+    temperature: 0.7,
+    max_tokens: 512,
   });
-  return response.text?.trim() ?? '';
+  return completion.choices[0]?.message?.content?.trim() ?? '';
 }
 
 // ---------------------------------------------------------------------------
@@ -471,13 +478,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? '您好！我是阿嬷日程小助手 🌸\n\n您可以问我：\n• 某一天阿嬷住在谁家（启超、启源、启文）\n• 俊杰的上下班班次\n• 日历上的活动和假期计划\n• 新加坡公共假期\n• 或者聊任何话题！\n\n例如：「2026年6月15日阿嬷住在哪里？」'
         : "Hello! I'm Ahma Bot 🌸\n\nYou can ask me:\n• Where Ahma is staying on any date\n• Jun Jie's work shift on any date\n• Events and holiday plans on the calendar\n• Singapore public holidays\n• Or just have a chat!\n\nExample: \"Where is Ahma on 15 June 2026?\"";
   } else {
-    // Try Gemini AI first
-    const geminiKey = process.env.GEMINI_API_KEY ?? process.env.VITE_GEMINI_API_KEY ?? '';
-    if (geminiKey) {
+    // Try Groq AI first
+    const groqKey = process.env.GROQ_API_KEY ?? '';
+    if (groqKey) {
       try {
-        replyText = await getAiReply(userText, language, geminiKey);
+        replyText = await getAiReply(userText, language, groqKey);
       } catch (err: any) {
-        console.warn('Gemini failed, using local solver:', err?.message ?? err);
+        console.warn('Groq failed, using local solver:', err?.message ?? err);
       }
     }
 
