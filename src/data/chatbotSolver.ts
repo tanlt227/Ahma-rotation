@@ -156,12 +156,29 @@ export function solveChatLocally(
   // Check CNY specifically if asked
   if (query.includes('cny') || query.includes('chinese new year') || query.includes('新年') || query.includes('过年') || query.includes('除夕')) {
     const yrMatch = message.match(/\b(202\d|203\d)\b/);
-    const yr = yrMatch ? parseInt(yrMatch[1], 10) : 2026;
-    const cnyHost = yr % 3 === 2026 % 3 ? 'Kay Guan (启源/KG)' : yr % 3 === 2027 % 3 ? 'Kay Boon (启文/KB)' : 'Kay Cheow (启超/KC)';
-    if (isZh) {
-      return `🧧 **农历新年 (CNY) 特殊轮流安排**：\n• 时间：除夕傍晚 5:00 至 大年初二晚上 8:00\n• 轮流规则：\n  * 2026年：启源 (KG)\n  * 2027年：启文 (KB)\n  * 2028年：启超 (KC)\n  * 2029年：启源 (KG)（以此循环）\n• **${yr}年 新年阿嬷在：${cnyHost}**。`;
+    const currentYear = parseInt(todaySGT().split('-')[0]);
+    // "next year" → currentYear + 1, else use matched year or current year
+    const yr = yrMatch
+      ? parseInt(yrMatch[1], 10)
+      : (query.includes('next year') || query.includes('明年') ? currentYear + 1 : currentYear);
+
+    // Use actual CNY schedule data
+    const CNY_MAP: Record<number, { location: string; locationZh: string; code: string; eve: string; day1: string }> = {
+      2026: { code: 'KG', location: 'Kay Guan',  locationZh: '启源', eve: '2026-02-16', day1: '2026-02-17' },
+      2027: { code: 'KB', location: 'Kay Boon',  locationZh: '启文', eve: '2027-02-05', day1: '2027-02-06' },
+      2028: { code: 'KC', location: 'Kay Cheow', locationZh: '启超', eve: '2028-01-25', day1: '2028-01-26' },
+      2029: { code: 'KG', location: 'Kay Guan',  locationZh: '启源', eve: '2029-02-12', day1: '2029-02-13' },
+      2030: { code: 'KB', location: 'Kay Boon',  locationZh: '启文', eve: '2030-02-02', day1: '2030-02-03' },
+    };
+    const cny = CNY_MAP[yr];
+    if (cny) {
+      return isZh
+        ? `🧧 **${yr}年农历新年**：阿嬷在 **${cny.locationZh} (${cny.code})**。\n• 除夕 (${cny.eve}) 傍晚5点 至 初二 晚上8点。\n• 轮流：2026 启源 → 2027 启文 → 2028 启超 → 2029 启源（循环）。`
+        : `🧧 **CNY ${yr}**: Ahma stays at **${cny.location} (${cny.code})**.\n• From CNY Eve (${cny.eve}, 5pm) to Day 2 (8pm).\n• Rotation: 2026 KG → 2027 KB → 2028 KC → 2029 KG (repeating).`;
     }
-    return `🧧 **CNY Special Arrangement**:\n• Period: CNY Eve (5:00 PM) till CNY Day 2 (8:00 PM)\n• Repeating Order:\n  * 2026: Kay Guan (KG)\n  * 2027: Kay Boon (KB)\n  * 2028: Kay Cheow (KC)\n  * 2029: Kay Guan (KG) (repeating order)\n• **In ${yr}, Ahma will be at: ${cnyHost}**.`;
+    return isZh
+      ? `🧧 暂无 ${yr} 年的农历新年数据。已知：2026 启源、2027 启文、2028 启超、2029 启源。`
+      : `🧧 No CNY data for ${yr}. Known: 2026 KG, 2027 KB, 2028 KC, 2029 KG (repeating).`;
   }
 
   // 2. Check Jun Jie / Shift (also responds to "jj")
