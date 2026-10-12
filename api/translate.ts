@@ -57,16 +57,30 @@ Respond with this exact JSON schema:
   "notesZh": "<Chinese notes or empty string>"
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    });
+    // Retry up to 3 times on 503 (model overload)
+    let parsed: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        });
+        const raw = response.text?.trim() ?? '';
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON in response');
+        parsed = JSON.parse(jsonMatch[0]);
+        break;
+      } catch (err: any) {
+        const is503 = String(err?.message ?? err).includes('503') || String(err?.message ?? err).includes('UNAVAILABLE');
+        if (is503 && attempt < 2) {
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        throw err;
+      }
+    }
 
-    const raw = response.text?.trim() ?? '';
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON in response');
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed) throw new Error('No parsed response');
 
     return res.status(200).json({
       en:       parsed.en       || text,

@@ -261,16 +261,29 @@ RESPONSE STYLE:
 - No markdown headers or bullet overload — plain flowing text is fine
 - Keep responses concise (2-4 sentences for most answers)`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nUser: ${message}` }] }],
-      });
-
-      if (response.text?.trim()) {
-        return res.status(200).json({ reply: response.text.trim() });
+      // Retry up to 3 times on 503 (model overload)
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nUser: ${message}` }] }],
+          });
+          if (response.text?.trim()) {
+            return res.status(200).json({ reply: response.text.trim() });
+          }
+          break;
+        } catch (err: any) {
+          const is503 = String(err?.message ?? err).includes('503') || String(err?.message ?? err).includes('UNAVAILABLE');
+          if (is503 && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+            continue;
+          }
+          console.warn('[chat] Gemini failed:', err?.message ?? err);
+          break;
+        }
       }
     } catch (err: any) {
-      console.warn('[chat] Gemini failed:', err?.message ?? err);
+      console.warn('[chat] Gemini setup failed:', err?.message ?? err);
     }
   }
 
