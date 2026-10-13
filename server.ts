@@ -374,16 +374,48 @@ app.post('/api/chat', async (req, res) => {
         ? `要添加活动，请提供：\n• 活动名称\n• 日期（例如：2026年6月20日）\n• 地点（可选）\n• 备注（可选）\n\n例如："帮我添加：6月20日至22日全家到圣淘沙度假"`
         : `To add an event, please tell me:\n• Event title\n• Date (e.g. 20 June 2026)\n• Location (optional)\n• Notes (optional)\n\nExample: "Add a family staycation at Sentosa from 20 to 22 June 2026"`;
     }
-    if (query.includes('ahma') || query.includes('grandma') || query.includes('阿嬷') || query.includes('grandmother')) {
-      // Check if a date is mentioned (e.g. 2026-05-07, 7 may, 15 jun, etc.)
+    if (
+      query.includes('ahma') || query.includes('grandma') || query.includes('阿嬷') ||
+      query.includes('grandmother') || query.includes('kc') || query.includes('kg') || query.includes('kb') ||
+      query.includes('kay cheow') || query.includes('kay guan') || query.includes('kay boon') ||
+      query.includes('启超') || query.includes('启源') || query.includes('启文')
+    ) {
+      const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().split('T')[0];
+      const anchor = appState.settings?.grandmaAnchorDate || '2026-05-07';
+      const stayDays = appState.settings?.grandmaCycleDays || 14;
+      const seq = ['KC', 'KG', 'KB'];
+      const names: Record<string, { en: string; zh: string }> = {
+        KC: { en: "Kay Cheow / Dad's place (KC)", zh: '启超 / 爸爸家 (KC)' },
+        KG: { en: 'Kay Guan (KG)', zh: '启源 (KG)' },
+        KB: { en: 'Kay Boon (KB)', zh: '启文 (KB)' },
+      };
+
+      const getLocInfo = (dStr: string) => {
+        const [yA, mA, dA] = dStr.split('-').map(Number);
+        const [yB, mB, dB] = anchor.split('-').map(Number);
+        const diff = Math.round((Date.UTC(yA, mA - 1, dA) - Date.UTC(yB, mB - 1, dB)) / 86400000);
+        const total = seq.length * stayDays;
+        const cDay = ((diff % total) + total) % total;
+        const idx = Math.floor(cDay / stayDays);
+        const code = seq[idx] || 'KC';
+        const dayInStay = (cDay % stayDays) + 1;
+        const daysLeft = stayDays - dayInStay;
+        const nextCode = seq[(idx + 1) % seq.length];
+        const nextD = new Date(Date.UTC(yA, mA - 1, dA + daysLeft + 1)).toISOString().split('T')[0];
+        return { code, dayInStay, daysLeft, nextCode, nextDate: nextD };
+      };
+
+      const targetCode =
+        query.includes('kc') || query.includes('kay cheow') || query.includes('启超') || query.includes('dad') || query.includes('爸爸') ? 'KC' :
+        query.includes('kg') || query.includes('kay guan') || query.includes('启源') ? 'KG' :
+        query.includes('kb') || query.includes('kay boon') || query.includes('启文') ? 'KB' : null;
+
       const dateMatch = message.match(/(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})/) || message.match(/(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|[一二三四五六七八九十]+月)/i);
-      
-      let targetDate = '2026-05-07';
+      let targetDate = '';
       if (dateMatch) {
         if (dateMatch[1] && dateMatch[1].includes('-')) {
           targetDate = dateMatch[1];
         } else if (dateMatch[2]) {
-          // Parse natural date like 7 May 2026
           const dNum = parseInt(dateMatch[1]);
           const mNames: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
           const mKey = dateMatch[2].slice(0, 3).toLowerCase();
@@ -392,28 +424,55 @@ app.post('/api/chat', async (req, res) => {
         }
       }
 
-      // Check Ahma anchor: 2026-05-07 cycle start @ Kay Cheow
-      const anchor = appState.settings?.grandmaAnchorDate || '2026-05-07';
-      const stayDays = appState.settings?.grandmaCycleDays || 14;
-      const [yA, mA, dA] = targetDate.split('-').map(Number);
-      const [yB, mB, dB] = anchor.split('-').map(Number);
-      const diff = Math.round((Date.UTC(yA, mA - 1, dA) - Date.UTC(yB, mB - 1, dB)) / 86400000);
-      const totalCycleDays = 3 * stayDays;
-      const cycleDay = ((diff % totalCycleDays) + totalCycleDays) % totalCycleDays;
-      const locIdx = Math.floor(cycleDay / stayDays);
-      const seq = ['KC', 'KG', 'KB'];
-      const code = seq[locIdx] || 'KC';
-      const names: Record<string, { en: string; zh: string }> = {
-        KC: { en: "Dad (KC)", zh: '爸爸家 (KC)' },
-        KG: { en: 'Kay Guan (KG)', zh: '启源 (KG)' },
-        KB: { en: 'Kay Boon (KB)', zh: '启文 (KB)' },
-      };
-      const dayInStay = (cycleDay % stayDays) + 1;
+      const asksWhen =
+        query.includes('when') || query.includes('next') || query.includes('coming') || query.includes('come') ||
+        query.includes('arrive') || query.includes('visit') || query.includes('turn') || query.includes('go') ||
+        query.includes('几时') || query.includes('什么时候') || query.includes('何时') || query.includes('下次') ||
+        query.includes('过来') || query.includes('去') || query.includes('来') || query.includes('到') || query.includes('轮到') ||
+        (!targetDate && targetCode !== null);
+
+      const cur = getLocInfo(today);
+
+      if (asksWhen && targetCode) {
+        const [yT, mT, dT] = today.split('-').map(Number);
+        let nextArrival = '';
+        let nextEndDate = '';
+        let daysAway = 0;
+        for (let i = 1; i <= seq.length * stayDays * 3; i++) {
+          const checkD = new Date(Date.UTC(yT, mT - 1, dT + i)).toISOString().split('T')[0];
+          const info = getLocInfo(checkD);
+          if (info.code === targetCode && info.dayInStay === 1) {
+            nextArrival = checkD;
+            daysAway = i;
+            nextEndDate = new Date(Date.UTC(yT, mT - 1, dT + i + stayDays - 1)).toISOString().split('T')[0];
+            break;
+          }
+        }
+
+        const locName = names[targetCode];
+        if (cur.code === targetCode) {
+          const nextLoc = names[cur.nextCode];
+          return isZh
+            ? `👵 阿嬷目前就在 **${locName.zh}**！\n• 今天是第 ${cur.dayInStay} 天（共 ${stayDays} 天），还剩 **${cur.daysLeft}** 天（直到 ${cur.nextDate} 前往 ${nextLoc.zh}）。\n• 下一次再轮到 ${locName.zh} 是 **${nextArrival}**（${daysAway} 天后）。`
+            : `👵 **Ahma is currently at ${locName.en} right now!**\n• Today is Day ${cur.dayInStay} of ${stayDays} (${cur.daysLeft} days remaining, until ${cur.nextDate} when she moves to ${nextLoc.en}).\n• Her next return visit to ${locName.en} will be on **${nextArrival}** (in ${daysAway} days).`;
+        }
+
+        const curLoc = names[cur.code];
+        return isZh
+          ? `👵 阿嬷下次到 **${locName.zh}** 是 **${nextArrival}**（${daysAway} 天后，住到 ${nextEndDate}）。\n• 目前阿嬷在 **${curLoc.zh}**，还剩 ${cur.daysLeft} 天（直到 ${cur.nextDate}）。`
+          : `👵 Ahma will be coming over to **${locName.en}** on **${nextArrival}** (in ${daysAway} days, staying until ${nextEndDate}).\n• Currently, Ahma is staying at **${curLoc.en}** (${cur.daysLeft} days remaining until ${cur.nextDate}).`;
+      }
+
+      const checkDate = targetDate || today;
+      const isToday = checkDate === today;
+      const info = getLocInfo(checkDate);
+      const loc = names[info.code];
+      const nextLoc = names[info.nextCode];
 
       if (isZh) {
-        return `在 ${targetDate}，阿嬷住在 **${names[code].zh}**（第 ${dayInStay} 天）。\n阿嬷按 爸爸家 (KC) > 启源 (KG) > 启文 (KB) 的次序每 ${stayDays} 天轮流一次。`;
+        return `👵 ${isToday ? '今天' : `在 **${checkDate}**`}，阿嬷住在 **${loc.zh}**（第 ${info.dayInStay}/${stayDays} 天，还剩 ${info.daysLeft} 天，将于 ${info.nextDate} 前往 ${nextLoc.zh}）。`;
       }
-      return `On **${targetDate}**, Ahma is staying at **${names[code].en}** (Day ${dayInStay} of ${stayDays}).\nAhma rotates in sequence: Dad (KC) → Kay Guan (KG) → Kay Boon (KB) every ${stayDays} days.`;
+      return `👵 ${isToday ? 'Today' : `On **${checkDate}**`}, Ahma is staying at **${loc.en}** (Day ${info.dayInStay} of ${stayDays}, ${info.daysLeft} days remaining until ${info.nextDate} when she moves to ${nextLoc.en}).`;
     }
 
     // 2. Check if asking about Jun Jie / shift

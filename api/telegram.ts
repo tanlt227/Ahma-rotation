@@ -80,14 +80,35 @@ function getAhmaLocation(dateStr: string) {
   const year = parseInt(dateStr.split('-')[0], 10);
   const cny = CNY_DATES[year];
   if (cny && (dateStr === cny.eve || dateStr === cny.day1 || dateStr === cny.day2)) {
-    return { code: cny.code, isCny: true };
+    const stage = dateStr === cny.eve ? 'Eve' : dateStr === cny.day1 ? 'Day 1' : 'Day 2';
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const nextDate = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().split('T')[0];
+    return { code: cny.code, dayInStay: 1, daysLeft: 0, nextCode: 'resumes rotation', nextDate, isCny: true, cnyStage: stage };
   }
   const diff = daysBetween(dateStr, GRANDMA_ANCHOR);
   const total = GRANDMA_ROTATION_SEQUENCE.length * GRANDMA_DAYS_PER_LOCATION;
   const cycleDay = ((diff % total) + total) % total;
-  const code = GRANDMA_ROTATION_SEQUENCE[Math.floor(cycleDay / GRANDMA_DAYS_PER_LOCATION)];
+  const locIdx = Math.floor(cycleDay / GRANDMA_DAYS_PER_LOCATION);
+  const code = GRANDMA_ROTATION_SEQUENCE[locIdx];
   const dayInStay = (cycleDay % GRANDMA_DAYS_PER_LOCATION) + 1;
-  return { code, dayInStay, isCny: false };
+  const daysLeft = GRANDMA_DAYS_PER_LOCATION - dayInStay;
+  const nextCode = GRANDMA_ROTATION_SEQUENCE[(locIdx + 1) % GRANDMA_ROTATION_SEQUENCE.length];
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const nextDate = new Date(Date.UTC(y, m - 1, d + daysLeft + 1)).toISOString().split('T')[0];
+  return { code, dayInStay, daysLeft, nextCode, nextDate, isCny: false, cnyStage: '' };
+}
+
+function nextAhmaVisit(fromDate: string, targetCode: string) {
+  const [yA, mA, dA] = fromDate.split('-').map(Number);
+  for (let i = 1; i <= 42 * 3; i++) {
+    const dStr = new Date(Date.UTC(yA, mA - 1, dA + i)).toISOString().split('T')[0];
+    const info = getAhmaLocation(dStr);
+    if (info.code === targetCode && info.dayInStay === 1 && !info.isCny) {
+      const endStr = new Date(Date.UTC(yA, mA - 1, dA + i + GRANDMA_DAYS_PER_LOCATION - 1)).toISOString().split('T')[0];
+      return { date: dStr, endDate: endStr, daysAway: i };
+    }
+  }
+  return { date: '?', endDate: '?', daysAway: -1 };
 }
 
 function getJunjieShift(dateStr: string) {
@@ -188,17 +209,63 @@ function resolveAnswer(message: string, isZh: boolean): string {
 
   // --- Ahma location ---
   if (asksAhma) {
-    const check = dateStr || '2026-05-07';
+    const today = todaySGT();
+    const current = getAhmaLocation(today);
+    const targetCode =
+      q.includes('kc') || q.includes('kay cheow') || q.includes('启超') || q.includes('dad') || q.includes('爸爸') ? 'KC' :
+      q.includes('kg') || q.includes('kay guan') || q.includes('启源') ? 'KG' :
+      q.includes('kb') || q.includes('kay boon') || q.includes('启文') ? 'KB' : null;
+
+    const asksWhen =
+      q.includes('when') || q.includes('next') || q.includes('coming') || q.includes('come') ||
+      q.includes('arrive') || q.includes('visit') || q.includes('visiting') || q.includes('turn') ||
+      q.includes('go') || q.includes('reach') || q.includes('几时') || q.includes('什么时候') ||
+      q.includes('何时') || q.includes('下次') || q.includes('过来') || q.includes('去') ||
+      q.includes('来') || q.includes('到') || q.includes('轮到') ||
+      (!dateStr && targetCode !== null);
+
+    if (asksWhen) {
+      if (targetCode) {
+        const locName = LOCATION_NAMES[targetCode] ?? { en: targetCode, zh: targetCode };
+        const isCurrentlyThere = current.code === targetCode;
+        const nextVisit = nextAhmaVisit(today, targetCode);
+
+        if (isCurrentlyThere) {
+          const nextName = LOCATION_NAMES[current.nextCode] ?? { en: current.nextCode, zh: current.nextCode };
+          return isZh
+            ? `👵 阿嬷目前就在 ${locName.zh} (${targetCode})！\n• 今天是第 ${current.dayInStay} 天（共 ${GRANDMA_DAYS_PER_LOCATION} 天），还剩 ${current.daysLeft} 天（直到 ${current.nextDate} 前往 ${nextName.zh}）。\n• 下一次再轮到 ${locName.zh} 是 ${nextVisit.date}（${nextVisit.daysAway} 天后）。`
+            : `👵 Ahma is currently at ${locName.en} (${targetCode}) right now!\n• Today is Day ${current.dayInStay} of ${GRANDMA_DAYS_PER_LOCATION} (${current.daysLeft} days remaining, until ${current.nextDate} when she moves to ${nextName.en}).\n• Her next return visit to ${locName.en} is on ${nextVisit.date} (in ${nextVisit.daysAway} days).`;
+        }
+
+        if (nextVisit.daysAway >= 0) {
+          const curName = LOCATION_NAMES[current.code] ?? { en: current.code, zh: current.code };
+          return isZh
+            ? `👵 阿嬷下次到 ${locName.zh} (${targetCode}) 是 ${nextVisit.date}（${nextVisit.daysAway} 天后，住到 ${nextVisit.endDate}）。\n• 目前阿嬷在 ${curName.zh}，还剩 ${current.daysLeft} 天（直到 ${current.nextDate}）。`
+            : `👵 Ahma will be coming over to ${locName.en} (${targetCode}) on ${nextVisit.date} (in ${nextVisit.daysAway} days, staying until ${nextVisit.endDate}).\n• Currently, Ahma is staying at ${curName.en} (${current.daysLeft} days left until ${current.nextDate}).`;
+        }
+      } else {
+        // No target code mentioned — tell where Ahma is today and when she moves next
+        const curName = LOCATION_NAMES[current.code] ?? { en: current.code, zh: current.code };
+        const nextName = LOCATION_NAMES[current.nextCode] ?? { en: current.nextCode, zh: current.nextCode };
+        return isZh
+          ? `👵 阿嬷目前在 ${curName.zh} (${current.code})，还剩 ${current.daysLeft} 天，将于 ${current.nextDate} 前往 ${nextName.zh} (${current.nextCode})。`
+          : `👵 Ahma is currently at ${curName.en} (${current.code}) with ${current.daysLeft} days left, then moves to ${nextName.en} (${current.nextCode}) on ${current.nextDate}.`;
+      }
+    }
+
+    const check = dateStr || today;
+    const isToday = check === today;
     const loc = getAhmaLocation(check);
     const name = LOCATION_NAMES[loc.code] ?? { en: loc.code, zh: loc.code };
     if (loc.isCny) {
       return isZh
-        ? `在 ${check}，适逢农历新年特殊安排，阿嬷住在 ${name.zh}（${loc.code}）。`
-        : `On ${check}, it's the CNY special arrangement — Ahma is at ${name.en} (${loc.code}).`;
+        ? `🧧 在 ${check}，适逢农历新年特殊安排，阿嬷住在 ${name.zh}（${loc.code}）。`
+        : `🧧 On ${check}, it's the CNY special arrangement — Ahma is at ${name.en} (${loc.code}).`;
     }
+    const nextName = LOCATION_NAMES[loc.nextCode] ?? { en: loc.nextCode, zh: loc.nextCode };
     return isZh
-      ? `在 ${check}，阿嬷住在 ${name.zh}（${loc.code}）。\n当前周期居住第 ${loc.dayInStay} 天（共 ${GRANDMA_DAYS_PER_LOCATION} 天）。\n轮流顺序：启超 → 启源 → 启文，从 2026年5月7日 开始。`
-      : `On ${check}, Ahma is staying at ${name.en} (${loc.code}).\nDay ${loc.dayInStay} of ${GRANDMA_DAYS_PER_LOCATION} in this stay.\nRotation: Kay Cheow (KC) → Kay Guan (KG) → Kay Boon (KB), starting 7 May 2026.`;
+      ? `👵 ${isToday ? '今天' : `在 ${check}`}，阿嬷住在 ${name.zh}（${loc.code}）。\n• 当前周期居住第 ${loc.dayInStay} 天（共 ${GRANDMA_DAYS_PER_LOCATION} 天，还剩 ${loc.daysLeft} 天，将于 ${loc.nextDate} 前往 ${nextName.zh}）。`
+      : `👵 ${isToday ? 'Today' : `On ${check}`}, Ahma is staying at ${name.en} (${loc.code}).\n• Day ${loc.dayInStay} of ${GRANDMA_DAYS_PER_LOCATION} in this stay (${loc.daysLeft} days left, moving to ${nextName.en} on ${loc.nextDate}).`;
   }
 
   // --- Jun Jie shift ---
@@ -418,20 +485,37 @@ Message: "${message}"`;
   // -------------------------------------------------------------------------
   // Step 3: Normal conversational reply with full calendar context
   // -------------------------------------------------------------------------
-  const systemPrompt = `You are Ahma Bot 🌸, a warm and friendly family assistant for the "Ahma's Rotation" app. You love chatting with the family and can talk about anything — daily life, food, feelings, general questions, or just casual conversation. You are helpful, cheerful, and feel like a family member yourself.
+  const today = todaySGT();
+  const ahmaNow = getAhmaLocation(today);
+  const locNow = LOCATION_NAMES[ahmaNow.code] ?? { en: ahmaNow.code, zh: ahmaNow.code };
+  const nextKC = nextAhmaVisit(today, 'KC');
+  const nextKG = nextAhmaVisit(today, 'KG');
+  const nextKB = nextAhmaVisit(today, 'KB');
+  const jjToday = getJunjieShift(today);
+  const nextLocNow = LOCATION_NAMES[ahmaNow.nextCode] ?? { en: ahmaNow.nextCode, zh: ahmaNow.nextCode };
 
-Your specialty is the family calendar:
-- Ahma rotates: Dad's place (爸爸家/KC) → Kay Guan (启源/KG) → Kay Boon (启文/KB), 14 days each, anchor 7 May 2026 at Dad's place.
+  const systemPrompt = `TODAY IS ${today} (Singapore Time, SGT UTC+8). Use this as the current date for ALL answers.
+
+You are Ahma Bot 🌸, a warm and friendly family assistant for the "Ahma's Rotation" app. You love chatting with the family and can talk about anything — daily life, food, feelings, general questions, or just casual conversation. You are helpful, cheerful, and feel like a family member yourself.
+
+CRITICAL LIVE CALENDAR DATA (USE DIRECTLY — DO NOT CALCULATE OR COUNT CYCLES FROM MAY 2026):
+- Ahma is CURRENTLY at: ${locNow.en} (${ahmaNow.code}), Day ${ahmaNow.dayInStay}/${GRANDMA_DAYS_PER_LOCATION}, ${ahmaNow.daysLeft} days remaining. Moves to ${nextLocNow.en} on ${ahmaNow.nextDate}.
+- Next time Ahma arrives at KC (Kay Cheow / Dad's place / 爸爸家): ${nextKC.date} (in ${nextKC.daysAway} days, staying until ${nextKC.endDate}).
+- Next time Ahma arrives at KG (Kay Guan / 启源): ${nextKG.date} (in ${nextKG.daysAway} days, staying until ${nextKG.endDate}).
+- Next time Ahma arrives at KB (Kay Boon / 启文): ${nextKB.date} (in ${nextKB.daysAway} days, staying until ${nextKB.endDate}).
+- Jun Jie TODAY: ${jjToday.name}${jjToday.time ? ` (${jjToday.time})` : ''} (Week ${jjToday.weekNum} of 3).
 - CNY special (Eve 5pm → Day 2 8pm): 2026 KG, 2027 KB, 2028 KC (Dad's), 2029 KG, repeating.
-- Jun Jie 3-week shift roster anchored Monday 15 Jun 2026:
-  Week 1: Mon-Tue Night/晚 (2200-0900), Wed OFF, Thu REST, Fri-Sun Morning/早 (0630-1530).
-  Week 2: Mon Morning/早 (0630-1530), Tue OFF, Wed-Thu Afternoon 1/午1 (1400-0200), Fri-Sat Afternoon 2/午2 (1500-0100), Sun REST.
-  Week 3: Mon OFF, Tue-Thu Morning/早 (0630-1530), Fri REST, Sat-Sun Afternoon 3/午3 (1600-0100).
-- Shift Chinese short forms: Morning=早, Afternoon 1=午1, Afternoon 2=午2, Afternoon 3=午3, Night=晚, OFF=休, REST=休息.
+- Rotation sequence: Dad's place (KC) → Kay Guan (KG) → Kay Boon (KB), 14 days each.
 ${eventContext || '\n(No calendar events loaded)'}
 
-When answering about events or plans, translate event titles and details into Chinese if the user is speaking Chinese, or keep in English otherwise.
-For casual chat, just be natural and warm. For calendar questions, be accurate and concise.
+ANSWER RULES:
+- When asked "When is Ahma coming over / next at KC / Dad's place / 爸爸家" → ANSWER DIRECTLY: ${nextKC.date} (in ${nextKC.daysAway} days). If she is currently there, state that she is already at KC right now!
+- When asked "When is Ahma next at KG / 启源" → ANSWER DIRECTLY: ${nextKG.date} (in ${nextKG.daysAway} days).
+- When asked "When is Ahma next at KB / 启文" → ANSWER DIRECTLY: ${nextKB.date} (in ${nextKB.daysAway} days).
+- When asked "Where is Ahma today / now" → ANSWER DIRECTLY: ${locNow.en} (${ahmaNow.code}), Day ${ahmaNow.dayInStay} of 14, with ${ahmaNow.daysLeft} days remaining.
+- CRITICAL: DO NOT start by reciting the cycle history or counting cycles from 7 May 2026! Answer the user's question directly in the very first sentence.
+- When answering about events or plans, translate event titles and details into Chinese if the user is speaking Chinese, or keep in English otherwise.
+- For casual chat, just be natural and warm. For calendar questions, be accurate and concise.
 Answer in ${language === 'zh' ? 'Chinese (中文)' : 'English'}. Plain text only, no Markdown.`;
 
   const completion = await groq.chat.completions.create({

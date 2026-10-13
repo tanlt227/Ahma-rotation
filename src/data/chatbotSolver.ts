@@ -97,10 +97,16 @@ export function solveChatLocally(
     query.includes('启源') ||
     query.includes('启文')
   ) {
-    // "next visit / coming over / when" query
-    const asksNext = query.includes('next') || query.includes('when') || query.includes('coming') ||
-                     query.includes('arrive') || query.includes('下次') || query.includes('什么时候') ||
-                     query.includes('几时') || query.includes('过来');
+    // "next visit / coming over / when / which house" query
+    const asksNext =
+      query.includes('next') || query.includes('when') || query.includes('coming') ||
+      query.includes('come') || query.includes('arrive') || query.includes('arriving') ||
+      query.includes('turn') || query.includes('visit') || query.includes('visiting') ||
+      query.includes('go to') || query.includes('going') || query.includes('reach') ||
+      query.includes('reaches') || query.includes('下次') || query.includes('什么时候') ||
+      query.includes('几时') || query.includes('何时') || query.includes('过来') ||
+      query.includes('去') || query.includes('来') || query.includes('轮到') || query.includes('到') ||
+      (!targetDate && (query.includes('kc') || query.includes('kg') || query.includes('kb') || query.includes('dad') || query.includes('爸爸') || query.includes('启超') || query.includes('启源') || query.includes('启文')));
 
     if (asksNext) {
       const targetCode =
@@ -112,31 +118,47 @@ export function solveChatLocally(
       const currentInfo = getGrandmaLocation(today, settings.grandmaAnchorDate, overrides, settings.grandmaCycleDays);
 
       if (targetCode) {
+        const locName = getAhmaLocationName(targetCode, isZh ? 'zh' : 'en');
+        const isCurrentlyThere = currentInfo.locationCode === targetCode;
+
         // Find next arrival (dayInStay === 1) at targetCode
         let nextDate = '';
+        let nextEndDate = '';
         let daysAway = 0;
         for (let i = 1; i <= 42 * 3; i++) {
           const ds = addDaysSGT(i);
           const info = getGrandmaLocation(ds, settings.grandmaAnchorDate, overrides, settings.grandmaCycleDays);
           if (info.locationCode === targetCode && info.dayInCurrentStay === 1) {
-            nextDate = ds; daysAway = i; break;
+            nextDate = ds;
+            daysAway = i;
+            nextEndDate = addDaysSGT(i + (info.stayDuration || 14) - 1);
+            break;
           }
         }
-        const locName = getAhmaLocationName(targetCode, isZh ? 'zh' : 'en');
-        if (nextDate) {
+
+        if (isCurrentlyThere) {
+          const nextLocName = getAhmaLocationName(currentInfo.nextLocationCode, isZh ? 'zh' : 'en');
           return isZh
-            ? `👵 阿嬷下次到 **${locName} (${targetCode})** 是 **${nextDate}**（${daysAway} 天后）。\n• 目前阿嬷在 ${getAhmaLocationName(currentInfo.locationCode, 'zh')}，还有 ${currentInfo.daysRemainingInStay} 天。`
-            : `👵 Ahma's next visit to **${locName} (${targetCode})** is on **${nextDate}** (in ${daysAway} days).\n• Currently at ${getAhmaLocationName(currentInfo.locationCode, 'en')}, ${currentInfo.daysRemainingInStay} days remaining.`;
+            ? `👵 **阿嬷目前就在 ${locName} (${targetCode})！**\n• 今天是第 ${currentInfo.dayInCurrentStay} 天（共 ${currentInfo.stayDuration} 天），还剩 **${currentInfo.daysRemainingInStay}** 天（直到 ${currentInfo.nextMoveDate} 前往 ${nextLocName}）。\n• 下一次再轮到 ${locName} 是 **${nextDate}**（${daysAway} 天后）。`
+            : `👵 **Ahma is currently at ${locName} (${targetCode}) right now!**\n• Today is Day ${currentInfo.dayInCurrentStay} of ${currentInfo.stayDuration} (${currentInfo.daysRemainingInStay} days remaining, until ${currentInfo.nextMoveDate} when she moves to ${nextLocName}).\n• Her next return visit to ${locName} will be on **${nextDate}** (in ${daysAway} days).`;
+        }
+
+        if (nextDate) {
+          const currentLocName = getAhmaLocationName(currentInfo.locationCode, isZh ? 'zh' : 'en');
+          return isZh
+            ? `👵 阿嬷下次到 **${locName} (${targetCode})** 是 **${nextDate}**（${daysAway} 天后，住到 ${nextEndDate}）。\n• 目前阿嬷在 **${currentLocName}**，还剩 ${currentInfo.daysRemainingInStay} 天（直到 ${currentInfo.nextMoveDate}）。`
+            : `👵 Ahma will be coming over to **${locName} (${targetCode})** on **${nextDate}** (in ${daysAway} days, staying until ${nextEndDate}).\n• Currently, Ahma is staying at **${currentLocName}** (${currentInfo.daysRemainingInStay} days left until ${currentInfo.nextMoveDate}).`;
         }
       } else {
-        // No specific location — just say where Ahma is now and when she moves next
+        // No specific location — tell where Ahma is now and when she moves next
         return isZh
-          ? `👵 阿嬷目前在 **${getAhmaLocationName(currentInfo.locationCode, 'zh')} (${currentInfo.locationCode})**，还有 **${currentInfo.daysRemainingInStay}** 天，然后 **${currentInfo.nextMoveDate}** 前往 ${getAhmaLocationName(currentInfo.nextLocationCode, 'zh')} (${currentInfo.nextLocationCode})。`
+          ? `👵 阿嬷目前在 **${getAhmaLocationName(currentInfo.locationCode, 'zh')} (${currentInfo.locationCode})**，还剩 **${currentInfo.daysRemainingInStay}** 天，将于 **${currentInfo.nextMoveDate}** 前往 ${getAhmaLocationName(currentInfo.nextLocationCode, 'zh')} (${currentInfo.nextLocationCode})。`
           : `👵 Ahma is currently at **${getAhmaLocationName(currentInfo.locationCode, 'en')} (${currentInfo.locationCode})** with **${currentInfo.daysRemainingInStay}** days left, then moves to ${getAhmaLocationName(currentInfo.nextLocationCode, 'en')} (${currentInfo.nextLocationCode}) on **${currentInfo.nextMoveDate}**.`;
       }
     }
 
     const checkDate = targetDate || todaySGT();
+    const isToday = checkDate === todaySGT();
     const grandma = getGrandmaLocation(checkDate, settings.grandmaAnchorDate, overrides, settings.grandmaCycleDays);
     const locNameZh = getAhmaLocationName(grandma.locationCode, 'zh');
     const locNameEn = getAhmaLocationName(grandma.locationCode, 'en');
@@ -145,12 +167,12 @@ export function solveChatLocally(
       if (grandma.cnyArrangement) {
         return `🧧 在 **${checkDate}**，适逢农历新年特殊轮流安排：\n• 阿嬷住在 **${locNameZh}** (${grandma.locationCode})。\n• 时间安排：除夕（5pm起）至 初二（8pm）。\n• 当日属于：**${grandma.cnyArrangement.stageLabelZh}**（${grandma.cnyArrangement.timeWindowZh}）。\n• 新年轮流顺序为：2026 启源(KG) -> 2027 启文(KB) -> 2028 启超(KC) -> 2029 启源(KG)，以此循环。`;
       }
-      return `👵 在 **${checkDate}**，阿嬷住在 **${locNameZh}** (${grandma.locationCode})。\n• 当前周期居住第 ${grandma.dayInCurrentStay} 天（周期共 ${grandma.stayDuration} 天）。\n• 周期开始日期为 2026年5月7日（启超/KC），按 启超 > 启源 > 启文 顺序轮流。${grandma.isOverridden ? `\n• ⚡ 注意：该日期有特殊调期安排！` : ''}`;
+      return `👵 ${isToday ? '今天' : `在 **${checkDate}**`}，阿嬷住在 **${locNameZh}** (${grandma.locationCode})。\n• 当前周期居住第 ${grandma.dayInCurrentStay} 天（还剩 ${grandma.daysRemainingInStay} 天，将于 ${grandma.nextMoveDate} 前往 ${getAhmaLocationName(grandma.nextLocationCode, 'zh')}）。${grandma.isOverridden ? `\n• ⚡ 注意：该日期有特殊调期安排！` : ''}`;
     }
     if (grandma.cnyArrangement) {
       return `🧧 On **${checkDate}**, Ahma is at **${locNameEn}** (${grandma.locationCode}) under the CNY Special Arrangement:\n• Window: CNY Eve (5:00 PM) till CNY Day 2 (8:00 PM).\n• Today's stage: **${grandma.cnyArrangement.stageLabel}** (${grandma.cnyArrangement.timeWindow}).\n• Annual CNY sequence: 2026 Kay Guan -> 2027 Kay Boon -> 2028 Kay Cheow -> 2029 Kay Guan (repeating).`;
     }
-    return `👵 On **${checkDate}**, Ahma is staying at **${locNameEn}** (${grandma.locationCode}).\n• Day ${grandma.dayInCurrentStay} of ${grandma.stayDuration} in this stay.\n• Rotation sequence: Kay Cheow (KC) → Kay Guan (KG) → Kay Boon (KB) (starts 7 May 2026 @ Kay Cheow).${grandma.isOverridden ? `\n• ⚡ Note: Special arrangement override active for this date.` : ''}`;
+    return `👵 ${isToday ? 'Today' : `On **${checkDate}**`}, Ahma is staying at **${locNameEn}** (${grandma.locationCode}).\n• Day ${grandma.dayInCurrentStay} of ${grandma.stayDuration} in this stay (${grandma.daysRemainingInStay} days left, moving to ${getAhmaLocationName(grandma.nextLocationCode, 'en')} on ${grandma.nextMoveDate}).${grandma.isOverridden ? `\n• ⚡ Note: Special arrangement override active for this date.` : ''}`;
   }
 
   // Check CNY specifically if asked

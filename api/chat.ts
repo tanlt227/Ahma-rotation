@@ -265,6 +265,70 @@ async function callGroq(groq: Groq, messages: Groq.Chat.ChatCompletionMessagePar
 // Vercel handler
 // ---------------------------------------------------------------------------
 
+function resolveLocalReply(message: string, lang: 'en' | 'zh', today: string): string {
+  const isZh = lang === 'zh' || /[\u4e00-\u9fa5]/.test(message);
+  const q = message.toLowerCase();
+  const ahma = getAhmaInfo(today);
+  const nextKC = nextAhmaVisit(today, 'KC');
+  const nextKG = nextAhmaVisit(today, 'KG');
+  const nextKB = nextAhmaVisit(today, 'KB');
+  const jj = getJunjieShift(today);
+
+  const asksAhma =
+    q.includes('ahma') || q.includes('grandma') || q.includes('grandmother') ||
+    q.includes('阿嬷') || q.includes('外婆') || q.includes('奶奶') ||
+    q.includes('kay cheow') || q.includes('kay guan') || q.includes('kay boon') ||
+    q.includes('启超') || q.includes('启源') || q.includes('启文') ||
+    q.includes('kc') || q.includes('kg') || q.includes('kb');
+
+  if (asksAhma) {
+    const targetCode =
+      q.includes('kc') || q.includes('kay cheow') || q.includes('启超') || q.includes('dad') || q.includes('爸爸') ? 'KC' :
+      q.includes('kg') || q.includes('kay guan') || q.includes('启源') ? 'KG' :
+      q.includes('kb') || q.includes('kay boon') || q.includes('启文') ? 'KB' : null;
+
+    const asksWhen =
+      q.includes('when') || q.includes('next') || q.includes('coming') || q.includes('come') ||
+      q.includes('arrive') || q.includes('visit') || q.includes('turn') || q.includes('go') ||
+      q.includes('几时') || q.includes('什么时候') || q.includes('何时') || q.includes('下次') ||
+      q.includes('过来') || q.includes('去') || q.includes('来') || q.includes('到') || q.includes('轮到') ||
+      targetCode !== null;
+
+    if (asksWhen && targetCode) {
+      const loc = LOCATION_NAMES[targetCode] ?? { en: targetCode, zh: targetCode };
+      const visit = targetCode === 'KC' ? nextKC : targetCode === 'KG' ? nextKG : nextKB;
+      const curLoc = LOCATION_NAMES[ahma.code] ?? { en: ahma.code, zh: ahma.code };
+
+      if (ahma.code === targetCode) {
+        return isZh
+          ? `👵 阿嬷目前就在 ${loc.zh} (${targetCode})！\n• 今天是第 ${ahma.dayInStay} 天（共 ${GRANDMA_DAYS} 天），还剩 ${ahma.daysLeft} 天（直到 ${ahma.nextDate}）。\n• 下次再轮到 ${loc.zh} 是 ${visit.date}（${visit.daysAway} 天后）。`
+          : `👵 Ahma is currently at ${loc.en} (${targetCode}) right now!\n• Today is Day ${ahma.dayInStay} of ${GRANDMA_DAYS} (${ahma.daysLeft} days remaining until ${ahma.nextDate}).\n• Her next return visit to ${loc.en} is on ${visit.date} (in ${visit.daysAway} days).`;
+      }
+      return isZh
+        ? `👵 阿嬷下次到 **${loc.zh} (${targetCode})** 是 **${visit.date}**（${visit.daysAway} 天后）。\n• 目前阿嬷在 ${curLoc.zh}，还剩 ${ahma.daysLeft} 天（直到 ${ahma.nextDate}）。`
+        : `👵 Ahma will be coming over to **${loc.en} (${targetCode})** on **${visit.date}** (in ${visit.daysAway} days).\n• Currently, Ahma is staying at ${curLoc.en} (${ahma.daysLeft} days left until ${ahma.nextDate}).`;
+    }
+
+    const curLoc = LOCATION_NAMES[ahma.code] ?? { en: ahma.code, zh: ahma.code };
+    const nextLoc = LOCATION_NAMES[ahma.nextCode] ?? { en: ahma.nextCode, zh: ahma.nextCode };
+    return isZh
+      ? `👵 今天阿嬷住在 **${curLoc.zh} (${ahma.code})**（第 ${ahma.dayInStay}/${GRANDMA_DAYS} 天，还剩 ${ahma.daysLeft} 天，将于 ${ahma.nextDate} 前往 ${nextLoc.zh}）。`
+      : `👵 Today Ahma is staying at **${curLoc.en} (${ahma.code})** (Day ${ahma.dayInStay}/${GRANDMA_DAYS}, ${ahma.daysLeft} days remaining until ${ahma.nextDate} when she moves to ${nextLoc.en}).`;
+  }
+
+  const asksJJ = q.includes('junjie') || q.includes('jun jie') || q.includes('俊杰') || q.includes('shift') || q.includes('班次') || q.includes('上班');
+  if (asksJJ) {
+    const shiftStr = jj.time ? `${jj.name} (${jj.time})` : jj.name;
+    return isZh
+      ? `今天俊杰上 **${shiftStr}**（第 ${jj.week}/3 周排班）。`
+      : `Today Jun Jie is on **${shiftStr}** (Week ${jj.week} of 3).`;
+  }
+
+  return isZh
+    ? `您好！我可以帮您查询阿嬷轮流日程（例如："阿嬷几时来爸爸家？"）、俊杰排班或家庭活动！`
+    : `Hello! I can help you check Ahma's rotation schedule (e.g. "When is Ahma coming over to KC house?"), Jun Jie's shifts, or family calendar events!`;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
@@ -304,17 +368,18 @@ FAMILY CALENDAR EVENTS:
 ${liveEvents}
 
 ANSWER RULES:
-- "When is Ahma coming over / next at KC / Dad's place" → answer is: ${nextKC.date} (in ${nextKC.daysAway} days from today ${today})
-- "When is Ahma next at KG" → answer is: ${nextKG.date} (in ${nextKG.daysAway} days)
-- "When is Ahma next at KB" → answer is: ${nextKB.date} (in ${nextKB.daysAway} days)
-- "Where is Ahma today/now" → she is at ${ahmaToday.code} (${LOCATION_NAMES[ahmaToday.code]?.en}), Day ${ahmaToday.dayInStay}/${GRANDMA_DAYS}
+- "When is Ahma coming over / next at KC / Dad's place / 爸爸家" → answer directly: ${nextKC.date} (in ${nextKC.daysAway} days from today). If she is currently there, state she is already at KC right now!
+- "When is Ahma next at KG / 启源" → answer directly: ${nextKG.date} (in ${nextKG.daysAway} days).
+- "When is Ahma next at KB / 启文" → answer directly: ${nextKB.date} (in ${nextKB.daysAway} days).
+- "Where is Ahma today/now" → she is at ${ahmaToday.code} (${LOCATION_NAMES[ahmaToday.code]?.en}), Day ${ahmaToday.dayInStay}/${GRANDMA_DAYS}, ${ahmaToday.daysLeft} days remaining.
 - "Where is Ahma tomorrow" → check the Next 7 days table above for ${addDaysToDate(today, 1)}
 - "JJ shift today/tomorrow" → check the Next 7 days table above
 - For CNY questions → use the CNY special stays table above
 - For family events/plans → use FAMILY CALENDAR EVENTS above
 - For casual chat → just chat naturally, no calendar needed
+- CRITICAL: Answer directly in the very first sentence. NEVER recite rotation history or count cycles from 7 May 2026.
 
-Keep answers short and direct (2-3 sentences). No bullet lists unless asking for a schedule.`;
+Keep answers short and direct (2-3 sentences). Plain text only.`;
 
       const reply = await callGroq(groq, [
         { role: 'system', content: systemPrompt },
@@ -327,5 +392,7 @@ Keep answers short and direct (2-3 sentences). No bullet lists unless asking for
     }
   }
 
-  return res.status(200).json({ reply: '' });
+  // Fallback to local resolver if Groq is unavailable or returns empty
+  const localReply = resolveLocalReply(message, lang, today);
+  return res.status(200).json({ reply: localReply });
 }
