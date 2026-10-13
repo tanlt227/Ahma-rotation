@@ -137,6 +137,17 @@ function extractDate(message: string): string {
   if (q.includes('day after tomorrow') || q.includes('后天')) return addDaysSGT(2);
   if (q.includes('next week') || q.includes('下周')) return addDaysSGT(7);
 
+  // Day-of-week resolver
+  const DOW = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+  const dowIdx = DOW.findIndex((d) => q.includes(d));
+  if (dowIdx !== -1) {
+    const [ty, tm, td] = today.split('-').map(Number);
+    const todayDow = new Date(Date.UTC(ty, tm - 1, td)).getUTCDay();
+    let diff = (dowIdx - todayDow + 7) % 7 || 7;
+    if (q.includes('next ')) diff += 7;
+    return addDaysSGT(diff);
+  }
+
   const isoMatch = message.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (isoMatch) {
     return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
@@ -451,7 +462,7 @@ function resolveAnswer(message: string, isZh: boolean): string {
 
   // 2. Jun Jie shift query
   const asksShift =
-    q.includes('jun jie') || q.includes('junjie') || q.includes('俊杰') ||
+    q.includes('jun jie') || q.includes('junjie') || q.includes('俊杰') || q.includes('jj') ||
     q.includes('shift') || q.includes('班次') || q.includes('上班');
 
   if (asksShift) {
@@ -615,11 +626,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             memberId: 'all',
             location: loc,
             time: tm,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            createdAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+            updatedAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
           };
 
-          const cloudSaved = await saveEventToGitHub(newEv);
+          // Save via /api/events — same path as the web app, ensures GitHub sync + proper schema
+          let cloudSaved = false;
+          const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '');
+          if (appUrl) {
+            try {
+              const evRes = await fetch(`${appUrl}/api/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newEv),
+              });
+              cloudSaved = evRes.ok;
+            } catch (err) {
+              console.warn('[telegram] Failed to save event via /api/events:', err);
+              // Fallback: try direct GitHub write
+              cloudSaved = await saveEventToGitHub(newEv);
+            }
+          } else {
+            cloudSaved = await saveEventToGitHub(newEv);
+          }
           const dateRange = newEv.endDate ? `${newEv.startDate} – ${newEv.endDate}` : newEv.startDate;
           const locPart = newEv.location ? ` @ ${newEv.location}` : '';
           const syncNote = cloudSaved

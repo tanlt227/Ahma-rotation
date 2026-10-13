@@ -168,20 +168,8 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (Array.isArray(data.events)) {
-          setEvents((prev) => {
-            // If server returned events, merge them
-            const serverMap = new Map<string, CalendarEvent>();
-            data.events.forEach((e: CalendarEvent) => serverMap.set(e.id, e));
-
-            // Keep any local events that may not yet have reached the server
-            prev.forEach((localEv) => {
-              if (!serverMap.has(localEv.id)) {
-                serverMap.set(localEv.id, localEv);
-              }
-            });
-
-            return Array.from(serverMap.values());
-          });
+          // Always trust server state — don't re-add locally deleted events
+          setEvents(data.events);
         }
 
         if (Array.isArray(data.overrides)) setOverrides(data.overrides);

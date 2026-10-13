@@ -25,33 +25,59 @@ const LOCATION_NAMES: Record<string, { en: string; zh: string }> = {
   KB: { en: 'Kay Boon',                zh: '启文' },
 };
 
-const SG_PUBLIC_HOLIDAYS: Record<string, string> = {
-  '2026-01-01': "New Year's Day",
-  '2026-02-17': 'Chinese New Year (Day 1)',
-  '2026-02-18': 'Chinese New Year (Day 2)',
-  '2026-03-20': 'Hari Raya Puasa',
-  '2026-04-03': 'Good Friday',
-  '2026-05-01': 'Labour Day',
-  '2026-05-27': 'Hari Raya Haji',
-  '2026-05-31': 'Vesak Day',
-  '2026-06-01': 'Vesak Day (In-Lieu)',
-  '2026-08-09': 'National Day',
-  '2026-08-10': 'National Day (In-Lieu)',
-  '2026-11-08': 'Deepavali',
-  '2026-11-09': 'Deepavali (In-Lieu)',
-  '2026-12-25': 'Christmas Day',
-  '2027-01-01': "New Year's Day",
-  '2027-02-06': 'Chinese New Year (Day 1)',
-  '2027-02-07': 'Chinese New Year (Day 2)',
-  '2027-03-10': 'Hari Raya Puasa',
-  '2027-03-26': 'Good Friday',
-  '2027-05-01': 'Labour Day',
-  '2027-05-16': 'Hari Raya Haji',
-  '2027-05-20': 'Vesak Day',
-  '2027-08-09': 'National Day',
-  '2027-10-29': 'Deepavali',
-  '2027-12-25': 'Christmas Day',
+const SG_PUBLIC_HOLIDAYS_BY_YEAR: Record<number, string[]> = {
+  2026: [
+    "2026-01-01: New Year's Day",
+    '2026-02-17: Chinese New Year Day 1',
+    '2026-02-18: Chinese New Year Day 2',
+    '2026-03-20: Hari Raya Puasa',
+    '2026-04-03: Good Friday',
+    '2026-05-01: Labour Day',
+    '2026-05-27: Hari Raya Haji',
+    '2026-05-31: Vesak Day (Sun)',
+    '2026-06-01: Vesak Day In-Lieu',
+    '2026-08-09: National Day (Sun)',
+    '2026-08-10: National Day In-Lieu',
+    '2026-11-08: Deepavali (Sun)',
+    '2026-11-09: Deepavali In-Lieu',
+    '2026-12-25: Christmas Day',
+  ],
+  2027: [
+    "2027-01-01: New Year's Day",
+    '2027-02-06: Chinese New Year Day 1',
+    '2027-02-07: Chinese New Year Day 2 (Sun)',
+    '2027-02-08: Chinese New Year In-Lieu',
+    '2027-03-10: Hari Raya Puasa',
+    '2027-03-26: Good Friday',
+    '2027-05-01: Labour Day',
+    '2027-05-16: Hari Raya Haji (Sun)',
+    '2027-05-17: Hari Raya Haji In-Lieu',
+    '2027-05-20: Vesak Day',
+    '2027-08-09: National Day',
+    '2027-10-29: Deepavali',
+    '2027-12-25: Christmas Day',
+  ],
+  2028: [
+    "2028-01-01: New Year's Day",
+    '2028-01-26: Chinese New Year Day 1',
+    '2028-01-27: Chinese New Year Day 2',
+    '2028-02-27: Hari Raya Puasa',
+    '2028-04-14: Good Friday',
+    '2028-05-01: Labour Day',
+    '2028-05-05: Hari Raya Haji',
+    '2028-05-08: Vesak Day',
+    '2028-08-09: National Day',
+    '2028-10-17: Deepavali',
+    '2028-12-25: Christmas Day',
+  ],
 };
+
+// Flat map for quick lookups
+const SG_PUBLIC_HOLIDAYS: Record<string, string> = {};
+Object.values(SG_PUBLIC_HOLIDAYS_BY_YEAR).flat().forEach((entry) => {
+  const [date] = entry.split(': ');
+  SG_PUBLIC_HOLIDAYS[date] = entry.split(': ').slice(1).join(': ');
+});
 
 const JUNJIE_ROSTER: { name: string; time: string }[] = [
   { name: 'Night',       time: '2200-0900' },
@@ -163,6 +189,10 @@ function buildCalendarContext(today: string): string {
     if (SG_PUBLIC_HOLIDAYS[d]) { nextHoliday = `${d} — ${SG_PUBLIC_HOLIDAYS[d]} (in ${i} days)`; break; }
   }
 
+  const holidayLists = [2026, 2027, 2028].map((yr) =>
+    `  ${yr}: ${(SG_PUBLIC_HOLIDAYS_BY_YEAR[yr] ?? []).join(' | ')}`
+  ).join('\n');
+
   return `=== LIVE CALENDAR DATA (Singapore Time) ===
 Today: ${today}
 Ahma NOW: ${loc.en} (${ahma.code}), Day ${ahma.dayInStay}/${GRANDMA_DAYS}, ${ahma.daysLeft} days remaining, then moves to ${LOCATION_NAMES[ahma.nextCode]?.en ?? ahma.nextCode} (${ahma.nextCode}) on ${ahma.nextDate}
@@ -173,6 +203,9 @@ USE THESE EXACT DATES (do not calculate yourself):
   Next time Ahma arrives at KG (Kay Guan): ${nextKG.date} — that is in ${nextKG.daysAway} days
   Next time Ahma arrives at KB (Kay Boon): ${nextKB.date} — that is in ${nextKB.daysAway} days
 Next public holiday: ${nextHoliday}
+
+Singapore Public Holidays by year (for year-specific queries):
+${holidayLists}
 
 Next 7 days schedule:
 ${weekSnap}
@@ -299,12 +332,28 @@ function resolveLocalReply(message: string, lang: 'en' | 'zh', today: string): s
       : `👵 Today Ahma is staying at **${curLoc.en} (${ahma.code})** (Day ${ahma.dayInStay}/${GRANDMA_DAYS}, ${ahma.daysLeft} days remaining until ${ahma.nextDate} when she moves to ${nextLoc.en}).`;
   }
 
-  const asksJJ = q.includes('junjie') || q.includes('jun jie') || q.includes('俊杰') || q.includes('shift') || q.includes('班次') || q.includes('上班');
+  const asksJJ = q.includes('junjie') || q.includes('jun jie') || q.includes('俊杰') || q.includes('jj') || q.includes('shift') || q.includes('班次') || q.includes('上班');
   if (asksJJ) {
+    // Resolve day-of-week if mentioned (e.g. "friday", "next monday")
+    let checkDate = today;
+    const DOW = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const dowIdx = DOW.findIndex((d) => q.includes(d));
+    if (dowIdx !== -1) {
+      const [ty, tm, td] = today.split('-').map(Number);
+      const todayDow = new Date(Date.UTC(ty, tm - 1, td)).getUTCDay();
+      let diff = (dowIdx - todayDow + 7) % 7 || 7;
+      if (q.includes('next ')) diff += 7;
+      checkDate = addDaysToDate(today, diff);
+    } else if (q.includes('tomorrow') || q.includes('明天')) {
+      checkDate = addDaysToDate(today, 1);
+    }
+    const jj = getJunjieShift(checkDate);
     const shiftStr = jj.time ? `${jj.name} (${jj.time})` : jj.name;
+    const dayLabel = checkDate === today ? (isZh ? '今天' : 'today') :
+                     checkDate === addDaysToDate(today, 1) ? (isZh ? '明天' : 'tomorrow') : checkDate;
     return isZh
-      ? `今天俊杰上 **${shiftStr}**（第 ${jj.week}/3 周排班）。`
-      : `Today Jun Jie is on **${shiftStr}** (Week ${jj.week} of 3).`;
+      ? `${dayLabel}俊杰上 **${shiftStr}**（第 ${jj.week}/3 周排班）。`
+      : `${dayLabel === 'today' || dayLabel === 'tomorrow' ? `On ${dayLabel}` : `On ${checkDate}`}, Jun Jie is on **${shiftStr}** (Week ${jj.week} of 3).`;
   }
 
   return isZh
@@ -356,7 +405,8 @@ ANSWER RULES:
 - "When is Ahma next at KB / 启文" → answer directly: ${nextKB.date} (in ${nextKB.daysAway} days).
 - "Where is Ahma today/now" → she is at ${ahmaToday.code} (${LOCATION_NAMES[ahmaToday.code]?.en}), Day ${ahmaToday.dayInStay}/${GRANDMA_DAYS}, ${ahmaToday.daysLeft} days remaining.
 - "Where is Ahma tomorrow" → check the Next 7 days table above for ${addDaysToDate(today, 1)}
-- "JJ shift today/tomorrow" → check the Next 7 days table above
+- "JJ shift today/tomorrow" → check the Next 7 days table above. "jj" = "jun jie" = "junjie" = same person
+- "is jj/jun jie working on friday/monday/saturday" → find that day in the Next 7 days table and report his shift
 - For CNY questions → use the CNY special stays table above
 - For family events/plans → use FAMILY CALENDAR EVENTS above
 - For casual chat → just chat naturally, no calendar needed

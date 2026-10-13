@@ -60,7 +60,16 @@ export function solveChatLocally(
 
   // If no date found but says "today" or "今天"
   if (!targetDate) {
-    if (query.includes('today') || query.includes('今天') || query.includes('今日')) {
+    // Day-of-week resolver: "friday", "next monday", "this saturday" etc.
+    const DOW = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const dowIdx = DOW.findIndex((d) => query.includes(d));
+    if (dowIdx !== -1) {
+      const todayDate = new Date(todaySGT());
+      const todayDow = todayDate.getUTCDay();
+      let diff = (dowIdx - todayDow + 7) % 7 || 7;
+      if (query.includes('next ')) diff += 7;
+      targetDate = addDaysSGT(diff);
+    } else if (query.includes('today') || query.includes('今天') || query.includes('今日')) {
       targetDate = todaySGT();
     } else if (query.includes('tomorrow') || query.includes('明天') || query.includes('明日')) {
       targetDate = addDaysSGT(1);
