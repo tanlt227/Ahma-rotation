@@ -1,4 +1,4 @@
-import { CalendarEvent, DayOverride, FamilyMember, CalendarAppSettings } from './types';
+import { CalendarEvent, DayOverride, FamilyMember, CalendarAppSettings } from '../types';
 import { DEFAULT_GRANDMA_ANCHOR, DEFAULT_JUNJIE_ANCHOR, DEFAULT_ROSTER_WEEKS } from './schedule';
 
 export const INITIAL_SEED_EVENTS: CalendarEvent[] = [

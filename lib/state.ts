@@ -144,7 +144,7 @@ async function fetchFromGitHub(): Promise<{ state: AppSyncState; sha: string | n
     throw new Error(`[github] GET ${url} → ${res.status}: ${body}`);
   }
 
-  const file: GhFileResponse = await res.json();
+  const file = (await res.json()) as GhFileResponse;
   // GitHub wraps content in base64 with newlines
   const json = Buffer.from(file.content, 'base64').toString('utf-8');
   const state: AppSyncState = JSON.parse(json);
@@ -185,7 +185,7 @@ async function pushToGitHub(state: AppSyncState, sha: string | null): Promise<vo
       try {
         const latest = await fetch(url, { headers: authHeaders(token) });
         if (latest.ok) {
-          const file: GhFileResponse = await latest.json();
+          const file = (await latest.json()) as GhFileResponse;
           currentSha = file.sha;
         }
       } catch {}

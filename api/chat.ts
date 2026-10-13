@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Groq from 'groq-sdk';
 import { readState } from '../lib/state';
+import { createGroqChat } from '../lib/groq';
 
 // ---------------------------------------------------------------------------
 // Schedule constants
@@ -221,23 +222,20 @@ async function fetchLiveEvents(): Promise<string> {
 // ---------------------------------------------------------------------------
 
 async function callGroq(groq: Groq, messages: Groq.Chat.ChatCompletionMessageParam[]): Promise<string> {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const completion = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant',
+      const { completion } = await createGroqChat(groq, {
         messages,
         temperature: 0.7,
         max_tokens: 512,
-        // @ts-ignore — disable qwen reasoning mode so it uses injected data directly
-        reasoning_effort: 'none',
       });
       return completion.choices[0]?.message?.content?.trim() ?? '';
     } catch (err: any) {
       const isRetryable = String(err?.message ?? err).includes('503') ||
                           String(err?.message ?? err).includes('429') ||
                           String(err?.message ?? err).includes('overloaded');
-      if (isRetryable && attempt < 2) {
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      if (isRetryable && attempt < 1) {
+        await new Promise((r) => setTimeout(r, 1000));
         continue;
       }
       throw err;

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Groq from 'groq-sdk';
+import { createGroqChat } from '../lib/groq';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -11,7 +12,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'text is required' });
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = (process.env.GROQ_API_KEY ?? '').trim();
   if (!apiKey) {
     return res.status(200).json({ en: text, zh: text, notesEn: notes || '', notesZh: notes || '' });
   }
@@ -34,15 +35,12 @@ JSON schema (respond with exactly this):
   try {
     const groq = new Groq({ apiKey });
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const completion = await groq.chat.completions.create({
-          model: 'llama-3.1-8b-instant',
+        const { completion } = await createGroqChat(groq, {
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.3,
           max_tokens: 256,
-          // @ts-ignore
-          reasoning_effort: 'none',
         });
 
         const raw = completion.choices[0]?.message?.content?.trim() ?? '';

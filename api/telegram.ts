@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Groq from 'groq-sdk';
-import { readState, updateState, isCloudSyncConfigured } from '../lib/state';
+import { readState, updateState, isCloudSyncConfigured, DEFAULT_STATE } from '../lib/state';
 import { broadcastState } from '../lib/broadcast';
+import { createGroqChat } from '../lib/groq';
 import type { CalendarEvent, AppSyncState } from '../src/types';
 
 // ---------------------------------------------------------------------------
@@ -367,7 +368,7 @@ function formatCalendarContext(calendarState: AppSyncState): string {
         const timePart = e.time ? ` at ${e.time}` : '';
         const locPart = e.location ? ` @ ${e.location}` : '';
         const notesPart = e.notes ? ` (${e.notes})` : '';
-        return `- [${e.category}] ${e.title} | ${dateRange}${timePart}${locPart} | Who: ${memberName(e.memberId)}${notesPart}`;
+        return `- [${e.category}] ${e.title} | ${dateRange}${timePart}${locPart} | Who: ${memberName(e.memberId ?? 'all')}${notesPart}`;
       })
       .join('\n');
     eventContext += `\nCurrent calendar events:\n${lines}`;
@@ -640,8 +641,7 @@ Respond ONLY with JSON:
 }`;
 
     try {
-      const intentCompletion = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant',
+      const { completion: intentCompletion } = await createGroqChat(groq, {
         messages: [{ role: 'user', content: intentPrompt }],
         temperature: 0.1,
         max_tokens: 256,
@@ -713,8 +713,7 @@ ANSWER RULES:
 - For casual chat, just be natural and warm. For calendar questions, be accurate and concise.
 Answer in ${language === 'zh' ? 'Chinese (中文)' : 'English'}. Plain text only, no Markdown.`;
 
-  const completion = await groq.chat.completions.create({
-    model: 'llama-3.1-8b-instant',
+  const { completion } = await createGroqChat(groq, {
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user',   content: message },
