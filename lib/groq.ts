@@ -1,10 +1,10 @@
 import Groq from 'groq-sdk';
 
 export const GROQ_CANDIDATE_MODELS = [
-  'openai/gpt-oss-20b',
-  'qwen/qwen3.8-27b',
   'llama-3.1-8b-instant',
   'llama3-8b-8192',
+  'openai/gpt-oss-20b',
+  'qwen/qwen3.8-27b',
 ];
 
 export type GroqChatParams = Omit<Parameters<Groq['chat']['completions']['create']>[0], 'model'>;
@@ -28,13 +28,14 @@ export async function createGroqChat(
         ...extraParams,
         model,
       } as Parameters<Groq['chat']['completions']['create']>[0])) as Groq.Chat.ChatCompletion;
-      // Some models (e.g. qwen) put their answer in reasoning_content when thinking mode fires
-      const content = completion.choices[0]?.message?.content?.trim()
-        || (completion.choices[0]?.message as any)?.reasoning_content?.trim()
+      // Extract content — some models use reasoning/reasoning_content instead of content
+      const msg = completion.choices[0]?.message as any;
+      const content = msg?.content?.trim()
+        || msg?.reasoning_content?.trim()
+        || msg?.reasoning?.trim()
         || '';
-      if (!content && model.includes('qwen')) {
-        // Qwen returned empty — skip to next model
-        console.warn(`[groq] Model ${model} returned empty content (reasoning mode), trying fallback...`);
+      if (!content) {
+        console.warn(`[groq] Model ${model} returned empty content, trying next model...`);
         continue;
       }
       return { completion, modelUsed: model };

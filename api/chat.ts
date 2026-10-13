@@ -262,8 +262,10 @@ async function callGroq(groq: Groq, messages: Groq.Chat.ChatCompletionMessagePar
         temperature: 0.7,
         max_tokens: 512,
       });
-      const content = completion.choices[0]?.message?.content?.trim()
-        || (completion.choices[0]?.message as any)?.reasoning_content?.trim()
+      const msg = completion.choices[0]?.message as any;
+      const content = msg?.content?.trim()
+        || msg?.reasoning_content?.trim()
+        || msg?.reasoning?.trim()
         || '';
       return content;
     } catch (err: any) {

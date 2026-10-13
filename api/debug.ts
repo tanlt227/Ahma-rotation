@@ -60,34 +60,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       result.groq = 'skipped — GROQ_API_KEY not set';
     }
 
-    // --- Test GitHub ---
+    // --- Test GitHub write ---
     if (githubToken) {
       try {
         const url = `https://api.github.com/repos/${githubRepo}/contents/${githubPath}`;
-        const ghRes = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${githubToken}`,
-            Accept: 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
-        });
+        const ghHeaders: Record<string, string> = {
+          Authorization: `Bearer ${githubToken}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+        };
 
-        if (ghRes.ok) {
-          const file: any = await ghRes.json();
-          const content = Buffer.from(file.content, 'base64').toString('utf-8');
-          const state = JSON.parse(content);
-          result.github = {
-            status: 'success ✅',
-            eventCount: state.events?.length ?? 0,
-            version: state.version,
-            lastUpdated: state.lastUpdated,
-            sha: file.sha.slice(0, 8),
-          };
-        } else if (ghRes.status === 404) {
+        const getRes = await fetch(url, { headers: ghHeaders });
+
+        if (getRes.ok) {
+          const file: any = await getRes.json();
+          const state = JSON.parse(Buffer.from(file.content, 'base64').toString('utf-8'));
+
+          // Test write: bump version number and write back
+          const testState = { ...state, version: (state.version ?? 1) + 1, lastUpdated: new Date().toISOString() };
+          const putRes = await fetch(url, {
+            method: 'PUT',
+            headers: ghHeaders,
+            body: JSON.stringify({
+              message: 'chore: debug write test',
+              content: Buffer.from(JSON.stringify(testState, null, 2)).toString('base64'),
+              sha: file.sha,
+              committer: { name: 'Ahma Debug', email: 'debug@ahma-rotation.app' },
+            }),
+          });
+
+          if (putRes.ok) {
+            result.github = {
+              status: 'read+write ✅',
+              eventCount: state.events?.length ?? 0,
+              version: `${state.version} → ${testState.version}`,
+              lastUpdated: testState.lastUpdated,
+              sha: file.sha.slice(0, 8),
+            };
+          } else {
+            const putErr = await putRes.text();
+            result.github = {
+              status: `read ✅ write ❌ HTTP ${putRes.status}`,
+              eventCount: state.events?.length ?? 0,
+              writeError: putErr.slice(0, 200),
+            };
+          }
+        } else if (getRes.status === 404) {
           result.github = { status: 'file not found ⚠️ — visit /api/init-state first' };
         } else {
-          const body = await ghRes.text();
-          result.github = { status: `failed ❌ HTTP ${ghRes.status}`, body };
+          const body = await getRes.text();
+          result.github = { status: `failed ❌ HTTP ${getRes.status}`, body };
         }
       } catch (err: any) {
         result.github = { status: 'error ❌', error: err?.message ?? String(err) };
