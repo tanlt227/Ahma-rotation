@@ -51,6 +51,7 @@ interface CalendarContextValue {
   deleteFamilyMember: (id: string) => Promise<void>;
   updateSettings: (newSettings: Partial<CalendarAppSettings>) => Promise<void>;
   resetToDefaults: () => Promise<void>;
+  isSyncing: React.MutableRefObject<boolean>;
 }
 
 const STORAGE_KEYS = {
@@ -432,6 +433,7 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
         deleteFamilyMember,
         updateSettings,
         resetToDefaults,
+        isSyncing,
       }}
     >
       {children}

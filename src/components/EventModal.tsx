@@ -32,7 +32,7 @@ export const EventModal: React.FC<EventModalProps> = ({
   targetDate,
   editingEvent,
 }) => {
-  const { addOrUpdateEvent, deleteEvent, familyMembers, language } = useCalendar();
+  const { addOrUpdateEvent, deleteEvent, familyMembers, language, isSyncing } = useCalendar();
 
   const [title, setTitle] = useState('');
   const [startDate, setStartDate] = useState(targetDate);
@@ -82,6 +82,9 @@ export const EventModal: React.FC<EventModalProps> = ({
     const titleText = title.trim();
     const notesText = notes.trim() || undefined;
 
+    // Block polling immediately — before translation starts
+    isSyncing.current = true;
+
     // Translate first (before saving) so one write contains everything
     let titleEn: string | undefined;
     let titleZh: string | undefined;
@@ -96,8 +99,6 @@ export const EventModal: React.FC<EventModalProps> = ({
       });
       if (res.ok) {
         const data = await res.json();
-        // Always store translated versions — even if same as original,
-        // they confirm the event has been processed for both languages
         titleEn = data.en || titleText;
         titleZh = data.zh || titleText;
         notesEn = data.notesEn || undefined;

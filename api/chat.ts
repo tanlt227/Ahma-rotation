@@ -262,7 +262,10 @@ async function callGroq(groq: Groq, messages: Groq.Chat.ChatCompletionMessagePar
         temperature: 0.7,
         max_tokens: 512,
       });
-      return completion.choices[0]?.message?.content?.trim() ?? '';
+      const content = completion.choices[0]?.message?.content?.trim()
+        || (completion.choices[0]?.message as any)?.reasoning_content?.trim()
+        || '';
+      return content;
     } catch (err: any) {
       const isRetryable = String(err?.message ?? err).includes('503') ||
                           String(err?.message ?? err).includes('429') ||

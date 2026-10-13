@@ -21,10 +21,22 @@ export async function createGroqChat(
 
   for (const model of GROQ_CANDIDATE_MODELS) {
     try {
+      // Disable qwen reasoning mode to prevent empty content responses
+      const extraParams = model.includes('qwen') ? { reasoning_effort: 'none' } : {};
       const completion = (await groq.chat.completions.create({
         ...params,
+        ...extraParams,
         model,
       } as Parameters<Groq['chat']['completions']['create']>[0])) as Groq.Chat.ChatCompletion;
+      // Some models (e.g. qwen) put their answer in reasoning_content when thinking mode fires
+      const content = completion.choices[0]?.message?.content?.trim()
+        || (completion.choices[0]?.message as any)?.reasoning_content?.trim()
+        || '';
+      if (!content && model.includes('qwen')) {
+        // Qwen returned empty — skip to next model
+        console.warn(`[groq] Model ${model} returned empty content (reasoning mode), trying fallback...`);
+        continue;
+      }
       return { completion, modelUsed: model };
     } catch (err: any) {
       lastError = err;
