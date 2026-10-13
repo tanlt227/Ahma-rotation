@@ -11,21 +11,29 @@
  *                    (defaults to "data/calendar-data.json")
  */
 
+import fs from 'fs';
+import path from 'path';
 import type { AppSyncState } from '../src/types';
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
+const LOCAL_DATA_PATH = path.resolve(process.cwd(), 'data/calendar-data.json');
+
+export function isCloudSyncConfigured(): boolean {
+  return Boolean(process.env.GITHUB_TOKEN);
+}
+
 function ghConfig() {
   const token = process.env.GITHUB_TOKEN;
-  const repo  = process.env.GITHUB_REPO;      // "owner/repo"
-  const path  = process.env.GITHUB_PATH ?? 'data/calendar-data.json';
+  const repo  = process.env.GITHUB_REPO || 'tanlt227/Ahma-rotation';
+  const ghPath = process.env.GITHUB_PATH || 'data/calendar-data.json';
 
-  if (!token || !repo) {
+  if (!token) {
     throw new Error(
-      'GITHUB_TOKEN and GITHUB_REPO env vars are required for persistence.'
+      'GITHUB_TOKEN env var is required for multi-device cloud persistence.'
     );
   }
-  return { token, repo, path };
+  return { token, repo, path: ghPath };
 }
 
 function apiUrl(repo: string, path: string) {
@@ -193,20 +201,51 @@ async function pushToGitHub(state: AppSyncState, sha: string | null): Promise<vo
   throw new Error(`[github] Failed to push after ${MAX_RETRIES} attempts (persistent SHA conflict)`);
 }
 
-// ─── public API (same shape as the old KV version) ───────────────────────────
+// ─── Local file helpers (used when running locally without GITHUB_TOKEN) ──────────
 
-/** Read the full app state from GitHub. Falls back to DEFAULT_STATE on first run. */
-export async function readState(): Promise<AppSyncState> {
+let memoryCache: AppSyncState | null = null;
+
+function readFromLocalFile(): AppSyncState {
   try {
-    const { state } = await fetchFromGitHub();
-    return state;
+    if (fs.existsSync(LOCAL_DATA_PATH)) {
+      const raw = fs.readFileSync(LOCAL_DATA_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      memoryCache = parsed;
+      return parsed;
+    }
   } catch (err) {
-    console.error('[github] readState failed, using defaults:', err);
-    return structuredClone(DEFAULT_STATE);
+    console.warn('[state] Could not read local file:', err);
+  }
+  return memoryCache ? structuredClone(memoryCache) : structuredClone(DEFAULT_STATE);
+}
+
+function writeToLocalFile(state: AppSyncState): void {
+  memoryCache = structuredClone(state);
+  try {
+    const dir = path.dirname(LOCAL_DATA_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(LOCAL_DATA_PATH, JSON.stringify(state, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[state] Could not write to local file (e.g. read-only serverless filesystem):', err);
   }
 }
 
-/** Persist the full app state to GitHub and return it. */
+// ─── public API ──────────────────────────────────────────────────────────────
+
+/** Read the full app state from GitHub or local storage. */
+export async function readState(): Promise<AppSyncState> {
+  if (isCloudSyncConfigured()) {
+    try {
+      const { state } = await fetchFromGitHub();
+      return state;
+    } catch (err) {
+      console.error('[github] readState failed, falling back:', err);
+    }
+  }
+  return readFromLocalFile();
+}
+
+/** Persist the full app state to GitHub or local storage and return it. */
 export async function writeState(newState: AppSyncState): Promise<AppSyncState> {
   const state: AppSyncState = {
     ...newState,
@@ -214,14 +253,18 @@ export async function writeState(newState: AppSyncState): Promise<AppSyncState> 
     version: (newState.version ?? 1) + 1,
   };
 
-  try {
-    // Always fetch the current sha before writing to avoid conflicts
-    const { sha } = await fetchFromGitHub();
-    await pushToGitHub(state, sha);
-  } catch (err) {
-    console.error('[github] writeState failed:', err);
+  if (isCloudSyncConfigured()) {
+    try {
+      const { sha } = await fetchFromGitHub();
+      await pushToGitHub(state, sha);
+      return state;
+    } catch (err) {
+      console.error('[github] writeState failed:', err);
+      throw err;
+    }
   }
 
+  writeToLocalFile(state);
   return state;
 }
 
@@ -229,13 +272,25 @@ export async function writeState(newState: AppSyncState): Promise<AppSyncState> 
 export async function updateState(
   mutate: (draft: AppSyncState) => AppSyncState | void
 ): Promise<AppSyncState> {
-  const { state: current, sha } = await fetchFromGitHub();
+  if (isCloudSyncConfigured()) {
+    const { state: current, sha } = await fetchFromGitHub();
+    const result = mutate(current);
+    const next: AppSyncState = {
+      ...(result !== undefined ? result : current),
+      lastUpdated: new Date().toISOString(),
+      version: (current.version ?? 1) + 1,
+    };
+    await pushToGitHub(next, sha);
+    return next;
+  }
+
+  const current = readFromLocalFile();
   const result = mutate(current);
   const next: AppSyncState = {
     ...(result !== undefined ? result : current),
     lastUpdated: new Date().toISOString(),
     version: (current.version ?? 1) + 1,
   };
-  await pushToGitHub(next, sha);
+  writeToLocalFile(next);
   return next;
 }

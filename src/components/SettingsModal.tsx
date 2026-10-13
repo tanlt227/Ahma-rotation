@@ -29,6 +29,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     resetToDefaults,
     events,
     overrides,
+    syncStatus,
+    language,
   } = useCalendar();
 
   const [grandmaAnchor, setGrandmaAnchor] = useState(settings.grandmaAnchorDate);
@@ -96,9 +98,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <Sliders className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base sm:text-lg">Calendar Settings & Anchors</h3>
+              <h3 className="font-bold text-base sm:text-lg">Calendar Settings & Multi-Device Sync</h3>
               <p className="text-xs text-zinc-400">
-                Configure rotation rules, locations, and family sync preferences
+                Configure rotation rules, family sync, and persistence
               </p>
             </div>
           </div>
@@ -112,32 +114,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
         {/* Scrollable Content */}
         <div className="p-5 overflow-y-auto space-y-6">
-          {/* Share & Real-time Info */}
-          <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="text-xs font-bold text-zinc-900">
-                Real-Time Multi-Device Sync is Active
+          {/* Multi-Device Cloud Sync Status Card */}
+          <div className={`border rounded-xl p-4 ${
+            syncStatus === 'connected'
+              ? 'bg-emerald-50/60 border-emerald-300'
+              : 'bg-amber-50/80 border-amber-300'
+          }`}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${syncStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                  <span className="text-xs font-black text-zinc-900">
+                    {syncStatus === 'connected'
+                      ? (language === 'zh' ? '多设备云端实时同步：已连接' : 'Multi-Device Cloud Sync: Connected')
+                      : (language === 'zh' ? '多设备云端同步：尚未配置 (仅保存在当前设备)' : 'Multi-Device Cloud Sync: Setup Needed (Saved Locally Only)')}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-600 mt-1.5 leading-relaxed">
+                  {syncStatus === 'connected'
+                    ? (language === 'zh'
+                        ? '家庭计划已实时保存在云端 GitHub (tanlt227/Ahma-rotation)！在任何手机、电脑或微信/浏览器打开，都会自动同步。'
+                        : 'Family events are synchronized via GitHub repository storage. All family members see new events automatically across devices.')
+                    : (language === 'zh'
+                        ? '提示：在 Vercel 部署上，为了让一部手机添加的计划能在另一部手机显示，需要在 Vercel 项目设置中添加环境变量 GITHUB_TOKEN（个人访问令牌）。目前修改仅保存在本设备的浏览器缓存中。'
+                        : 'Notice: On Vercel, to mirror events between different phones and computers, add GITHUB_TOKEN to your Vercel Project Settings → Environment Variables. Currently, plans are only saved on this device.')}
+                </p>
               </div>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Share this URL with family members. Any edits sync immediately to all devices!
-              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCopyLink}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-zinc-300 hover:bg-zinc-100 text-zinc-800 flex items-center gap-1.5 shadow-2xs"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Copied Link!' : 'Share URL'}</span>
-              </button>
-              <button
-                onClick={handleExportJson}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-zinc-300 hover:bg-zinc-100 text-zinc-800 flex items-center gap-1.5 shadow-2xs"
-                title="Backup / Export calendar data"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export JSON</span>
-              </button>
+
+            <div className="mt-3 pt-3 border-t border-zinc-200/60 flex items-center justify-between gap-2">
+              <span className="text-3xs text-zinc-500 font-mono">
+                Repo: tanlt227/Ahma-rotation
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white border border-zinc-300 hover:bg-zinc-100 text-zinc-800 flex items-center gap-1.5 shadow-2xs"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'Copied Link!' : 'Share URL'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white border border-zinc-300 hover:bg-zinc-100 text-zinc-800 flex items-center gap-1.5 shadow-2xs"
+                  title="Backup / Export calendar data"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export</span>
+                </button>
+              </div>
             </div>
           </div>
 

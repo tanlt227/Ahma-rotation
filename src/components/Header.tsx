@@ -151,7 +151,21 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* Live Sync Badge */}
-            <div className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-3xs sm:text-xs font-bold border bg-zinc-50 border-zinc-300 text-zinc-800">
+            <button
+              onClick={onOpenSettingsModal}
+              className={`inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full text-3xs sm:text-xs font-bold border transition-colors ${
+                syncStatus === 'connected'
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-950 hover:bg-emerald-100'
+                  : syncStatus === 'syncing'
+                  ? 'bg-blue-50 border-blue-300 text-blue-950 hover:bg-blue-100'
+                  : 'bg-amber-50 border-amber-300 text-amber-950 hover:bg-amber-100'
+              }`}
+              title={
+                syncStatus === 'connected'
+                  ? (language === 'zh' ? '多设备云端同步正常 (点击查看详情)' : 'Multi-device cloud sync connected (click for details)')
+                  : (language === 'zh' ? '多设备云端同步未连接，仅保存在当前设备 (点击查看设置)' : 'Cloud sync not connected; changes saved locally only (click for setup)')
+              }
+            >
               {syncStatus === 'connected' ? (
                 <>
                   <span className="relative flex h-2 w-2">
@@ -159,8 +173,6 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
                   </span>
                   <span className="font-extrabold text-emerald-800">{t.live}</span>
-                  <span className="text-zinc-400 hidden xs:inline">|</span>
-                  <span className="text-zinc-700 hidden xs:inline">{connectedDevices} dev</span>
                 </>
               ) : syncStatus === 'syncing' ? (
                 <>
@@ -169,11 +181,11 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               ) : (
                 <>
-                  <WifiOff className="w-3 h-3 text-amber-500" />
-                  <span className="text-amber-700">{t.offline}</span>
+                  <WifiOff className="w-3 h-3 text-amber-600" />
+                  <span className="text-amber-800 font-extrabold">{language === 'zh' ? '仅本设备' : 'Local Only'}</span>
                 </>
               )}
-            </div>
+            </button>
 
             {/* Desktop Quick Actions */}
             <div className="hidden sm:flex items-center gap-2">

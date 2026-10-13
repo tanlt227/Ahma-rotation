@@ -154,21 +154,47 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, [settings]);
 
-  // Optional backend sync: if running with Node server, sync; if serverless (Vercel), graceful fallback
+  // Backend sync: multi-device synchronization via /api/state
   const fetchState = useCallback(async () => {
     try {
       const res = await fetch('/api/state');
       if (res.ok) {
-        const data: AppSyncState = await res.json();
-        if (data.events) setEvents(data.events);
-        if (data.overrides) setOverrides(data.overrides);
-        if (data.familyMembers) setFamilyMembers(data.familyMembers);
+        const data: any = await res.json();
+        // If _cloudSync is false, inform the UI that cloud sync is unconfigured
+        if (data._cloudSync === false) {
+          setSyncStatus('disconnected');
+        } else {
+          setSyncStatus('connected');
+        }
+
+        if (Array.isArray(data.events)) {
+          setEvents((prev) => {
+            // If server returned events, merge them
+            const serverMap = new Map<string, CalendarEvent>();
+            data.events.forEach((e: CalendarEvent) => serverMap.set(e.id, e));
+
+            // Keep any local events that may not yet have reached the server
+            prev.forEach((localEv) => {
+              if (!serverMap.has(localEv.id)) {
+                serverMap.set(localEv.id, localEv);
+              }
+            });
+
+            return Array.from(serverMap.values());
+          });
+        }
+
+        if (Array.isArray(data.overrides)) setOverrides(data.overrides);
+        if (Array.isArray(data.familyMembers) && data.familyMembers.length > 0) {
+          setFamilyMembers(data.familyMembers);
+        }
         if (data.settings) setSettings(data.settings);
         setLastSyncTime(new Date());
-        setSyncStatus('connected');
+      } else {
+        setSyncStatus('disconnected');
       }
     } catch {
-      // In serverless / offline environment, localStorage provides persistence
+      setSyncStatus('disconnected');
     }
   }, []);
 
@@ -176,11 +202,23 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     // Initial fetch on mount
     fetchState();
 
-    // Poll every 15 seconds so all family devices stay in sync
-    const POLL_INTERVAL = 15_000;
+    // Re-fetch immediately when user switches to this tab / unlocks device
+    const handleFocus = () => {
+      fetchState();
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') fetchState();
+    });
+
+    // Poll every 6 seconds so changes made on other devices appear quickly
+    const POLL_INTERVAL = 6_000;
     const timer = setInterval(fetchState, POLL_INTERVAL);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [fetchState]);
 
   // Actions with local-first instant update and optimistic server call
@@ -216,12 +254,24 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     setLastSyncTime(new Date());
 
     try {
-      await fetch('/api/events', {
+      const res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fullEvent),
       });
-    } catch {}
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.cloudSync === false) {
+          setSyncStatus('disconnected');
+        } else {
+          setSyncStatus('connected');
+        }
+      } else {
+        setSyncStatus('disconnected');
+      }
+    } catch {
+      setSyncStatus('disconnected');
+    }
   }, []);
 
   const deleteEvent = useCallback(async (id: string) => {
@@ -229,8 +279,16 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     setLastSyncTime(new Date());
 
     try {
-      await fetch(`/api/events?id=${id}`, { method: 'DELETE' });
-    } catch {}
+      const res = await fetch(`/api/events?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.cloudSync === false) {
+          setSyncStatus('disconnected');
+        }
+      }
+    } catch {
+      setSyncStatus('disconnected');
+    }
   }, []);
 
   const addOrUpdateOverride = useCallback(async (override: Partial<DayOverride>) => {

@@ -212,8 +212,9 @@ app.post('/api/events', (req, res) => {
 });
 
 // Delete an event
-app.delete('/api/events/:id', (req, res) => {
-  const { id } = req.params;
+app.delete(['/api/events', '/api/events/:id'], (req, res) => {
+  const id = req.params.id || (req.query.id as string);
+  if (!id) return res.status(400).json({ error: 'id is required' });
   const updatedEvents = appState.events.filter((e: any) => e.id !== id);
 
   saveState({
