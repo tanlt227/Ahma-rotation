@@ -14,6 +14,7 @@ import {
   Heart,
   Bot,
   Globe,
+  Send,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -21,6 +22,7 @@ interface HeaderProps {
   onOpenOverrideModal: (date?: string) => void;
   onOpenSettingsModal: () => void;
   onOpenChatbotModal: () => void;
+  onOpenTelegramModal: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -28,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenOverrideModal,
   onOpenSettingsModal,
   onOpenChatbotModal,
+  onOpenTelegramModal,
 }) => {
   const {
     currentDate,
@@ -148,6 +151,16 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden xs:inline">
                 {language === 'zh' ? '小助手' : 'AI Assistant'}
               </span>
+            </button>
+
+            {/* Telegram Bot Launcher Button */}
+            <button
+              onClick={onOpenTelegramModal}
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg text-xs font-black bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-300 transition-colors shadow-2xs"
+              title="Telegram Bot Settings & Diagnostics"
+            >
+              <Send className="w-3.5 h-3.5 text-sky-600 -rotate-12" />
+              <span className="hidden xs:inline">Telegram</span>
             </button>
 
             {/* Live Sync Badge */}

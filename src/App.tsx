@@ -11,6 +11,7 @@ import { OverrideModal } from './components/OverrideModal';
 import { SettingsModal } from './components/SettingsModal';
 import { DayDetailDrawer } from './components/DayDetailDrawer';
 import { ChatbotModal } from './components/ChatbotModal';
+import { TelegramModal } from './components/TelegramModal';
 import { CalendarEvent } from './types';
 import { translations } from './data/i18n';
 import { Calendar, Clock, List, LayoutGrid, Plus, Bot, Heart } from 'lucide-react';
@@ -29,8 +30,15 @@ function CalendarApp() {
   const [overrideInitialTab, setOverrideInitialTab] = useState<'grandma_location' | 'junjie_shift'>('grandma_location');
 
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isChatbotModalOpen, setIsChatbotModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    const handler = () => setIsTelegramModalOpen(true);
+    window.addEventListener('open-telegram-modal', handler);
+    return () => window.removeEventListener('open-telegram-modal', handler);
+  }, []);
 
   // Handlers
   const handleOpenEventModal = (dateStr?: string, event?: CalendarEvent) => {
@@ -62,6 +70,7 @@ function CalendarApp() {
         onOpenOverrideModal={handleOpenOverrideModal}
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         onOpenChatbotModal={() => setIsChatbotModalOpen(true)}
+        onOpenTelegramModal={() => setIsTelegramModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -186,6 +195,11 @@ function CalendarApp() {
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+      />
+
+      <TelegramModal
+        isOpen={isTelegramModalOpen}
+        onClose={() => setIsTelegramModalOpen(false)}
       />
 
       <DayDetailDrawer

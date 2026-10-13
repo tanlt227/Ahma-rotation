@@ -112,6 +112,7 @@ export interface CalendarAppSettings {
   junjieAnchorDate: string; // '2026-06-15' (Week 1 start)
   junjieCycleWeeks: number; // 3
   junjieRosterWeeks?: ShiftRosterWeek[];
+  telegramBotToken?: string;
 }
 
 export interface AppSyncState {

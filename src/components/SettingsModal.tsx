@@ -12,6 +12,7 @@ import {
   Check,
   Share2,
   Download,
+  Send,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -165,6 +166,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   <span>Export</span>
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* Telegram Bot Card */}
+          <div className="border border-sky-300 rounded-xl p-4 bg-sky-50/50">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <div className="p-2 bg-sky-600 text-white rounded-xl shrink-0 shadow-2xs">
+                  <Send className="w-4 h-4 -rotate-12 translate-x-0.5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs sm:text-sm text-sky-950 flex items-center gap-1.5">
+                    <span>{language === 'zh' ? 'Telegram 机器人连接与诊断' : 'Telegram Bot Connection & Diagnostics'}</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-3xs font-extrabold bg-sky-200 text-sky-900 uppercase">Bot</span>
+                  </h4>
+                  <p className="text-xs text-sky-800 mt-0.5 leading-relaxed">
+                    {settings.telegramBotToken
+                      ? (language === 'zh'
+                          ? '已配置 Bot Token。随时通过 Telegram 与阿嬷日历助手互动！'
+                          : 'Bot token configured. Live-synced with Telegram updates.')
+                      : (language === 'zh'
+                          ? '机器人没有回复？点击打开诊断面板，查看实时错误、配置 Token 并绑定 Webhook。'
+                          : 'Bot not responding? Click to check diagnostics, configure your Token, and register the Webhook.')}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  window.dispatchEvent(new CustomEvent('open-telegram-modal'));
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-black bg-sky-600 hover:bg-sky-700 text-white shadow-2xs shrink-0 transition-colors"
+              >
+                {language === 'zh' ? '打开诊断' : 'Open Setup'}
+              </button>
             </div>
           </div>
 

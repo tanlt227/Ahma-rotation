@@ -148,12 +148,25 @@ export const ChatbotModal: React.FC<ChatbotModalProps> = ({ isOpen, onClose }) =
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-rose-100 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                onClose();
+                window.dispatchEvent(new CustomEvent('open-telegram-modal'));
+              }}
+              className="px-2 py-1 rounded-lg text-3xs font-black bg-white/20 hover:bg-white/30 text-white transition-colors flex items-center gap-1"
+              title="Open Telegram Bot Diagnostics & Setup"
+            >
+              <Send className="w-3 h-3 -rotate-12" />
+              <span>Telegram</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-rose-100 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Messages Body */}

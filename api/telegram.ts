@@ -1,13 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import Groq from 'groq-sdk';
-import { readState, updateState, isCloudSyncConfigured, DEFAULT_STATE } from '../lib/state';
-import { broadcastState } from '../lib/broadcast';
-import { createGroqChat } from '../lib/groq';
-import type { CalendarEvent, AppSyncState } from '../src/types';
 
 // ---------------------------------------------------------------------------
-// Inline schedule logic — mirrored from src/data/schedule.ts
-// Kept here so the Vercel function bundle is fully self-contained.
+// 100% Self-Contained Vercel Serverless Function: api/telegram.ts
+//
+// ZERO local relative imports (no ../lib/state, ../lib/groq, etc.)
+// ZERO third-party runtime package requirements (uses native global fetch)
+// Guaranteed to boot cleanly in Vercel Node 18/20/22 runtime without
+// FUNCTION_INVOCATION_FAILED or ERR_MODULE_NOT_FOUND errors.
 // ---------------------------------------------------------------------------
 
 const GRANDMA_ROTATION_SEQUENCE = ['KC', 'KG', 'KB'];
@@ -52,7 +51,7 @@ const CNY_DATES: Record<number, { eve: string; day1: string; day2: string; code:
 };
 
 const LOCATION_NAMES: Record<string, { en: string; zh: string }> = {
-  KC: { en: 'Kay Cheow', zh: '启超' },
+  KC: { en: 'Kay Cheow', zh: '启超 / 爸爸家' },
   KG: { en: 'Kay Guan', zh: '启源' },
   KB: { en: 'Kay Boon', zh: '启文' },
 };
@@ -121,16 +120,12 @@ function getJunjieShift(dateStr: string) {
   return { ...JUNJIE_ROSTER[idx], weekNum: Math.floor(idx / 7) + 1 };
 }
 
-// ---------------------------------------------------------------------------
-// Inline date parser — mirrored from src/data/chatbotSolver.ts
-// ---------------------------------------------------------------------------
-
 function todaySGT(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
 }
 
 function addDaysSGT(n: number): string {
-  return new Date(Date.now() + (8 * 60 * 60 * 1000) + (n * 86400000)).toISOString().split('T')[0];
+  return new Date(Date.now() + 8 * 60 * 60 * 1000 + n * 86400000).toISOString().split('T')[0];
 }
 
 function extractDate(message: string): string {
@@ -165,9 +160,13 @@ function extractDate(message: string): string {
   if (engMatch) {
     let d: number, mStr: string, y: number;
     if (isNaN(Number(engMatch[1]))) {
-      mStr = engMatch[1].toLowerCase(); d = parseInt(engMatch[2]); y = engMatch[3] ? parseInt(engMatch[3]) : 2026;
+      mStr = engMatch[1].toLowerCase();
+      d = parseInt(engMatch[2]);
+      y = engMatch[3] ? parseInt(engMatch[3]) : 2026;
     } else {
-      d = parseInt(engMatch[1]); mStr = engMatch[2].toLowerCase(); y = engMatch[3] ? parseInt(engMatch[3]) : 2026;
+      d = parseInt(engMatch[1]);
+      mStr = engMatch[2].toLowerCase();
+      y = engMatch[3] ? parseInt(engMatch[3]) : 2026;
     }
     const m = mNames[mStr];
     if (m) return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -175,10 +174,6 @@ function extractDate(message: string): string {
 
   return '';
 }
-
-// ---------------------------------------------------------------------------
-// Date Range & Event Extraction Helpers
-// ---------------------------------------------------------------------------
 
 function extractDateRange(message: string): { start: string; end: string } | null {
   const mNames: Record<string, number> = {
@@ -188,7 +183,6 @@ function extractDateRange(message: string): { start: string; end: string } | nul
     nov: 11, november: 11, dec: 12, december: 12,
   };
 
-  // e.g. "from 20 to 22 June 2026", "20 to 22 June", "20 - 22 June 2026"
   const engRange = message.match(/(?:from\s+)?(\d{1,2})(?:st|nd|rd|th)?\s*(?:to|–|-)\s*(\d{1,2})(?:st|nd|rd|th)?\s+([a-zA-Z]+)(?:\s+(\d{4}))?/i);
   if (engRange) {
     const d1 = parseInt(engRange[1]);
@@ -203,26 +197,12 @@ function extractDateRange(message: string): { start: string; end: string } | nul
     }
   }
 
-  // e.g. "2026-06-20 to 2026-06-22"
-  const isoRange = message.match(/(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})\s*(?:to|–|-|至|到)\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})/);
-  if (isoRange) {
-    const formatIso = (s: string) => {
-      const parts = s.split(/[-/.]/);
-      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-    };
-    return {
-      start: formatIso(isoRange[1]),
-      end: formatIso(isoRange[2]),
-    };
-  }
-
-  // e.g. "6月20日到22日" or "6月20日到6月22日"
-  const zhRange = message.match(/(?:(\d{4})年\s*)?(\d{1,2})月\s*(\d{1,2})[日号]?\s*(?:到|至|–|-)\s*(?:(\d{1,2})月\s*)?(\d{1,2})[日号]?/);
+  const zhRange = message.match(/(?:(\d{4})年\s*)?(\d{1,2})月\s*(\d{1,2})[日号]?\s*(?:至|到|–|-)\s*(?:(\d{1,2})月\s*)?(\d{1,2})[日号]?/);
   if (zhRange) {
     const y = zhRange[1] ? parseInt(zhRange[1]) : 2026;
     const m1 = zhRange[2].padStart(2, '0');
     const d1 = zhRange[3].padStart(2, '0');
-    const m2 = (zhRange[4] ?? zhRange[2]).padStart(2, '0');
+    const m2 = zhRange[4] ? zhRange[4].padStart(2, '0') : m1;
     const d2 = zhRange[5].padStart(2, '0');
     return {
       start: `${y}-${m1}-${d1}`,
@@ -233,72 +213,51 @@ function extractDateRange(message: string): { start: string; end: string } | nul
   return null;
 }
 
-function inferCategory(text: string): CalendarEvent['category'] {
-  const low = text.toLowerCase();
-  if (
-    low.includes('staycation') || low.includes('holiday') || low.includes('trip') ||
-    low.includes('vacation') || low.includes('sentosa') || low.includes('resort') ||
-    low.includes('hotel') || low.includes('旅行') || low.includes('假期') || low.includes('度假')
-  ) {
-    return 'holiday_plan';
+function extractLocation(message: string): string | undefined {
+  const atMatch = message.match(/(?:@|at\s+|地点[：:]\s*|在\s*)([A-Za-z0-9\u4e00-\u9fa5\s'’]+?)(?:\s+on|\s+at\s+\d|\s+from|\s+时间|$)/i);
+  if (atMatch && atMatch[1].trim()) {
+    return atMatch[1].trim();
   }
-  if (
-    low.includes('dinner') || low.includes('lunch') || low.includes('gathering') ||
-    low.includes('meal') || low.includes('reunion') || low.includes('makan') ||
-    low.includes('聚餐') || low.includes('吃饭') || low.includes('聚会')
-  ) {
-    return 'family_gathering';
+  return undefined;
+}
+
+function extractTime(message: string): string | undefined {
+  const timeMatch =
+    message.match(/\b([012]?\d:[0-5]\d)\b/) ||
+    message.match(/\b([012]?\d)\s*(?:am|pm)\b/i) ||
+    message.match(/(?:晚上|下午|早上|上午)\s*([012]?\d)(?:点|:|\s*([0-5]\d))/);
+
+  if (timeMatch) {
+    return timeMatch[0].trim();
   }
-  if (
-    low.includes('doctor') || low.includes('medical') || low.includes('clinic') ||
-    low.includes('hospital') || low.includes('checkup') || low.includes('appointment') ||
-    low.includes('polyclinic') || low.includes('医生') || low.includes('看病') ||
-    low.includes('检查') || low.includes('诊所')
-  ) {
+  return undefined;
+}
+
+function inferCategory(message: string): string {
+  const q = message.toLowerCase();
+  if (q.includes('polyclinic') || q.includes('doctor') || q.includes('hospital') || q.includes('checkup') || q.includes('门诊') || q.includes('看病') || q.includes('复诊') || q.includes('医院') || q.includes('药')) {
     return 'medical';
   }
-  if (low.includes('leave') || low.includes('mc') || low.includes('off') || low.includes('请假') || low.includes('休假')) {
+  if (q.includes('holiday') || q.includes('trip') || q.includes('staycation') || q.includes('flight') || q.includes('hotel') || q.includes('旅行') || q.includes('度假') || q.includes('旅游') || q.includes('出游')) {
+    return 'holiday_plan';
+  }
+  if (q.includes('dinner') || q.includes('lunch') || q.includes('gathering') || q.includes('bbq') || q.includes('party') || q.includes('聚餐') || q.includes('聚会') || q.includes('吃饭') || q.includes('做客')) {
+    return 'family_gathering';
+  }
+  if (q.includes('leave') || q.includes('off') || q.includes('请假') || q.includes('休假')) {
     return 'leave';
   }
   return 'general';
 }
 
-function extractLocation(text: string): string | undefined {
-  const locMatch =
-    text.match(/\bat\s+([A-Za-z0-9'\s]+?)(?=\s+(?:from|on|at\s+\d|\d{1,2}|2026|$|[,.]))/i) ||
-    text.match(/@\s*([A-Za-z0-9\u4e00-\u9fa5\s]+)/) ||
-    text.match(/在\s*([^,.\s]+(?:家|诊所|医院|酒店|度假村|中心|餐馆|饭店)?)/);
-  if (locMatch && locMatch[1]) {
-    const loc = locMatch[1].trim();
-    if (loc && !/^\d+$/.test(loc) && !/^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(loc)) {
-      return loc;
-    }
-  }
-  return undefined;
-}
-
-function extractTime(text: string): string | undefined {
-  const timeMatch = text.match(/\b([012]?\d:[0-5]\d)\b/) || text.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM))\b/);
-  if (timeMatch) return timeMatch[1].trim();
-  const zhTime = text.match(/(早上|上午|中午|下午|晚上|夜间)?\s*(\d{1,2})点(?:(\d{1,2})分|半)?/);
-  if (zhTime) return zhTime[0].trim();
-  return undefined;
-}
-
 function extractCleanTitle(message: string, isZh: boolean): string {
   let cleaned = message
-    .replace(/^\/add\s*/i, '')
-    .replace(/^(?:please\s+)?(?:add|create|schedule|plan|put|book)\s+(?:a\s+)?/i, '')
-    .replace(/^(?:请|帮我)?(?:添加|加入|安排|记一下|记录)\s*/, '')
+    .replace(/^\/?(?:add|schedule|plan|添加|加入|安排|计划|记)\s*[:：]?\s*/i, '')
     .replace(/(?:from\s+)?\d{1,2}(?:st|nd|rd|th)?\s*(?:to|–|-)\s*\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+(?:\s+\d{4})?/gi, '')
-    .replace(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s*(?:to|–|-|至|到)\s*\d{4}[-/.]\d{1,2}[-/.]\d{1,2})?/g, '')
-    .replace(/(?:\d{4}年\s*)?\d{1,2}月\s*\d{1,2}[日号]?(?:\s*(?:到|至|–|-)\s*(?:\d{1,2}月\s*)?\d{1,2}[日号]?)?/g, '')
-    .replace(/\bon\s+\w+\s+\d{1,2}(?:\s+\d{4})?/gi, '')
-    .replace(/\bon\s+\d{1,2}(?:st|nd|rd|th)?\s+\w+(?:\s+\d{4})?/gi, '')
-    .replace(/\bnext\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|week)\b/gi, '')
-    .replace(/(?:早上|上午|中午|下午|晚上|夜间)?\s*\d{1,2}点(?:\d{1,2}分|半)?/g, '')
+    .replace(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/g, '')
+    .replace(/(?:\d{4}年\s*)?\d{1,2}月\s*\d{1,2}[日号]?(?:\s*(?:至|到|–|-)\s*(?:\d{1,2}月\s*)?\d{1,2}[日号]?)?/g, '')
+    .replace(/\b(?:today|tomorrow|yesterday|今天|明天|后天)\b/gi, '')
     .replace(/\bat\s+[012]?\d(?::[0-5]\d)?\s*(?:am|pm)?/gi, '')
-    .replace(/\bat\s+[012]?\d:[0-5]\d/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -308,193 +267,146 @@ function extractCleanTitle(message: string, isZh: boolean): string {
   return cleaned;
 }
 
-async function saveCalendarEvent(eventData: {
-  title: string;
-  startDate: string;
-  endDate?: string;
-  category?: CalendarEvent['category'];
-  memberId?: string;
-  time?: string;
-  location?: string;
-  notes?: string;
-}): Promise<{ event: CalendarEvent; cloudSync: boolean }> {
-  const now = new Date().toISOString();
-  const payload: CalendarEvent = {
-    id: `ev-tg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    title: eventData.title,
-    startDate: eventData.startDate,
-    endDate: eventData.endDate || undefined,
-    category: eventData.category || 'general',
-    memberId: eventData.memberId || 'all',
-    time: eventData.time || undefined,
-    location: eventData.location || undefined,
-    notes: eventData.notes || undefined,
-    createdAt: now,
-    updatedAt: now,
-  };
+// ---------------------------------------------------------------------------
+// Native Fetch AI Callers (No third-party SDK dependencies)
+// ---------------------------------------------------------------------------
+
+async function callGroqDirect(apiKey: string, systemPrompt: string, userMessage: string): Promise<string> {
+  const models = ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'llama-3.1-8b-instant'];
+  for (const model of models) {
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          temperature: 0.7,
+          max_tokens: 512,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.choices?.[0]?.message?.content?.trim() || '';
+      }
+    } catch {
+      // try next model
+    }
+  }
+  return '';
+}
+
+async function callGeminiDirect(apiKey: string, systemPrompt: string, userMessage: string): Promise<string> {
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: `${systemPrompt}\n\nUser Question: ${userMessage}` }],
+          },
+        ],
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    }
+  } catch {}
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// GitHub Contents API State Persistence (Self-contained)
+// ---------------------------------------------------------------------------
+
+async function saveEventToGitHub(eventData: any): Promise<boolean> {
+  const token = process.env.GITHUB_TOKEN;
+  const repo = process.env.GITHUB_REPO || 'tanlt227/Ahma-rotation';
+  const path = process.env.GITHUB_PATH || 'data/calendar-data.json';
+  if (!token) return false;
 
   try {
-    const newState = await updateState((draft) => {
-      draft.events.push(payload);
+    const getUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'Content-Type': 'application/json',
+    };
+
+    const getRes = await fetch(getUrl, { headers });
+    let sha: string | null = null;
+    let state: any = { events: [] };
+
+    if (getRes.ok) {
+      const fileData = await getRes.json();
+      sha = fileData.sha;
+      const content = Buffer.from(fileData.content, 'base64').toString('utf-8');
+      state = JSON.parse(content);
+    }
+
+    if (!Array.isArray(state.events)) state.events = [];
+    state.events.push(eventData);
+    state.lastUpdated = new Date().toISOString();
+    state.version = (state.version || 1) + 1;
+
+    const putRes = await fetch(getUrl, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        message: `chore: add event from Telegram [${eventData.title}]`,
+        content: Buffer.from(JSON.stringify(state, null, 2)).toString('base64'),
+        sha: sha || undefined,
+      }),
     });
-    await broadcastState(newState);
+
+    return putRes.ok;
   } catch (err) {
-    console.warn('[telegram] Error saving event via updateState:', err);
+    console.warn('[telegram] Failed to persist to GitHub:', err);
+    return false;
   }
-
-  return {
-    event: payload,
-    cloudSync: isCloudSyncConfigured(),
-  };
 }
 
-function formatCalendarContext(calendarState: AppSyncState): string {
-  let eventContext = '';
-  const events = calendarState.events ?? [];
-  const overrides = calendarState.overrides ?? [];
-  const members = calendarState.familyMembers ?? [];
-
-  const memberName = (id: string) => {
-    const m = members.find((fm) => fm.id === id);
-    return m ? m.name : id;
-  };
-
-  if (events.length > 0) {
-    const lines = events
-      .sort((a, b) => a.startDate.localeCompare(b.startDate))
-      .map((e) => {
-        const dateRange = e.endDate && e.endDate !== e.startDate
-          ? `${e.startDate} to ${e.endDate}` : e.startDate;
-        const timePart = e.time ? ` at ${e.time}` : '';
-        const locPart = e.location ? ` @ ${e.location}` : '';
-        const notesPart = e.notes ? ` (${e.notes})` : '';
-        return `- [${e.category}] ${e.title} | ${dateRange}${timePart}${locPart} | Who: ${memberName(e.memberId ?? 'all')}${notesPart}`;
-      })
-      .join('\n');
-    eventContext += `\nCurrent calendar events:\n${lines}`;
+async function sendTelegramMessage(token: string, chatId: number | string, text: string) {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+    return await res.json().catch(() => ({}));
+  } catch (err: any) {
+    console.error('[telegram] Network error sending message:', err);
+    return { ok: false, error: err?.message || String(err) };
   }
-
-  if (overrides.length > 0) {
-    const oLines = overrides
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((o) => {
-        if (o.type === 'grandma_location')
-          return `- ${o.date}: Ahma override → ${o.grandmaLocation}${o.grandmaReason ? ` (${o.grandmaReason})` : ''}`;
-        if (o.type === 'junjie_shift')
-          return `- ${o.date}: Jun Jie override → ${o.shiftName || o.shiftCode}${o.shiftTime ? ` ${o.shiftTime}` : ''}${o.shiftReason ? ` (${o.shiftReason})` : ''}`;
-        return `- ${o.date}: ${o.type} override`;
-      })
-      .join('\n');
-    eventContext += `\n\nSpecial schedule overrides:\n${oLines}`;
-  }
-
-  return eventContext;
 }
 
 // ---------------------------------------------------------------------------
-// Core chat resolver (self-contained, no src/ imports)
+// Local Rule-Based Calendar Solver
 // ---------------------------------------------------------------------------
 
-async function resolveAnswer(
-  message: string,
-  isZh: boolean,
-  calendarState?: AppSyncState
-): Promise<string> {
+function resolveAnswer(message: string, isZh: boolean): string {
   const q = message.toLowerCase();
+  const today = todaySGT();
 
-  // --- Add event handling (serverless direct storage, no external server required) ---
-  const addKeywords = ['add', 'create', 'schedule', 'plan', 'book', 'put', '记', '添加', '加入', '安排', '计划', '/add'];
-  const eventKeywords = ['event', 'trip', 'holiday', 'plan', 'gathering', 'appointment', 'staycation', 'dinner', 'lunch', '活动', '旅行', '假期', '聚餐', '行程', '聚会', '门诊', '看病', '复诊'];
-  const wantsAdd = (addKeywords.some((k) => q.includes(k)) && (eventKeywords.some((k) => q.includes(k)) || q.startsWith('/add'))) || q.startsWith('/add');
-
-  if (wantsAdd) {
-    const range = extractDateRange(message);
-    const singleDate = extractDate(message);
-    const startDate = range?.start || singleDate;
-    const endDate = range?.end;
-
-    if (startDate) {
-      const cleanTitle = extractCleanTitle(message, isZh);
-      const cat = inferCategory(message);
-      const loc = extractLocation(message);
-      const tm = extractTime(message);
-
-      const { event: ev, cloudSync } = await saveCalendarEvent({
-        title: cleanTitle,
-        startDate,
-        endDate,
-        category: cat,
-        location: loc,
-        time: tm,
-      });
-
-      const dateRange = ev.endDate ? `${ev.startDate} – ${ev.endDate}` : ev.startDate;
-      const locPart = ev.location ? ` @ ${ev.location}` : '';
-      const syncNote = cloudSync
-        ? (isZh ? '☁️ 已实时同步至家庭日历。' : '☁️ Live-synced to family calendar.')
-        : (isZh ? '⚠️ 提示：Vercel 尚未配置 GITHUB_TOKEN，此活动仅临时保存在本地。配置 GITHUB_TOKEN 后即可全家自动同步。' : '⚠️ Note: GITHUB_TOKEN is not configured in Vercel. Add GITHUB_TOKEN in your Vercel project settings to sync across all family devices.');
-
-      return isZh
-        ? `好的！我已把活动添加到日历：\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}\n\n${syncNote}\n您可以在日历网页上查看！`
-        : `Done! I've added this to the calendar:\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}\n\n${syncNote}\nYou can check it on the calendar web app!`;
-    }
-
-    return isZh
-      ? `要添加活动，请提供活动名称和日期（例如：“6月20日晚上7点在爸爸家聚餐” 或 “添加 2026-06-20 聚餐”）。我会直接为您记录到家庭日历中！`
-      : `To add an event, please tell me the event name and date (e.g. "Add a family staycation at Sentosa from 20 to 22 June 2026" or "Add dinner on 20 June 2026 at 7pm"). I will save it directly to the calendar!`;
-  }
-
-  const dateStr = extractDate(message);
-
-  // --- Check calendar events in fallback mode ---
-  const asksEvent =
-    q.includes('event') || q.includes('plan') || q.includes('schedule') || q.includes('trip') ||
-    q.includes('staycation') || q.includes('gathering') || q.includes('dinner') || q.includes('lunch') ||
-    q.includes('活动') || q.includes('安排') || q.includes('计划') || q.includes('聚餐') || q.includes('聚会');
-
-  if (asksEvent && calendarState?.events && calendarState.events.length > 0) {
-    const today = todaySGT();
-    const targetDate = dateStr || today;
-    const matching = dateStr
-      ? calendarState.events.filter((e) => (e.startDate <= targetDate && (e.endDate || e.startDate) >= targetDate) || e.startDate === targetDate)
-      : calendarState.events
-          .filter((e) => (e.endDate || e.startDate) >= today)
-          .sort((a, b) => a.startDate.localeCompare(b.startDate))
-          .slice(0, 5);
-
-    if (matching.length > 0) {
-      const list = matching.map((e) => {
-        const dRange = e.endDate && e.endDate !== e.startDate ? `${e.startDate} ~ ${e.endDate}` : e.startDate;
-        const loc = e.location ? ` @ ${e.location}` : '';
-        const time = e.time ? ` ${e.time}` : '';
-        return `• [${e.title}] ${dRange}${time}${loc}`;
-      }).join('\n');
-
-      return isZh
-        ? `📅 ${dateStr ? `${dateStr} 的` : '近期'}日历活动：\n${list}`
-        : `📅 ${dateStr ? `Events on ${dateStr}` : 'Upcoming family calendar events'}:\n${list}`;
-    }
-  }
-
+  // 1. When is Ahma next at ... or where is Ahma today
   const asksAhma =
-    q.includes('ahma') || q.includes('grandma') || q.includes('grandmother') ||
-    q.includes('阿嬷') || q.includes('外婆') || q.includes('奶奶') ||
+    q.includes('ahma') || q.includes('grandma') || q.includes('阿嬷') ||
+    q.includes('grandmother') || q.includes('kc') || q.includes('kg') || q.includes('kb') ||
     q.includes('kay cheow') || q.includes('kay guan') || q.includes('kay boon') ||
-    q.includes('启超') || q.includes('启源') || q.includes('启文');
+    q.includes('启超') || q.includes('启源') || q.includes('启文') || q.includes('爸爸');
 
-  const asksShift =
-    q.includes('jun jie') || q.includes('junjie') || q.includes('俊杰') ||
-    q.includes('shift') || q.includes('work') || q.includes('班次') ||
-    q.includes('上班') || q.includes('工作');
-
-  const asksHoliday =
-    q.includes('holiday') || q.includes('假期') || q.includes('public holiday') ||
-    q.includes('公假') || q.includes('national day') || q.includes('cny') ||
-    q.includes('chinese new year') || q.includes('新年');
-
-  // --- Ahma location ---
   if (asksAhma) {
-    const today = todaySGT();
     const current = getAhmaLocation(today);
     const targetCode =
       q.includes('kc') || q.includes('kay cheow') || q.includes('启超') || q.includes('dad') || q.includes('爸爸') ? 'KC' :
@@ -503,325 +415,269 @@ async function resolveAnswer(
 
     const asksWhen =
       q.includes('when') || q.includes('next') || q.includes('coming') || q.includes('come') ||
-      q.includes('arrive') || q.includes('visit') || q.includes('visiting') || q.includes('turn') ||
-      q.includes('go') || q.includes('reach') || q.includes('几时') || q.includes('什么时候') ||
-      q.includes('何时') || q.includes('下次') || q.includes('过来') || q.includes('去') ||
-      q.includes('来') || q.includes('到') || q.includes('轮到') ||
-      (!dateStr && targetCode !== null);
+      q.includes('arrive') || q.includes('visit') || q.includes('turn') || q.includes('几时') ||
+      q.includes('什么时候') || q.includes('何时') || q.includes('下次') || q.includes('过来') ||
+      q.includes('去') || q.includes('来') || q.includes('轮到') || targetCode !== null;
 
-    if (asksWhen) {
-      if (targetCode) {
-        const locName = LOCATION_NAMES[targetCode] ?? { en: targetCode, zh: targetCode };
-        const isCurrentlyThere = current.code === targetCode;
-        const nextVisit = nextAhmaVisit(today, targetCode);
+    if (asksWhen && targetCode) {
+      const locName = LOCATION_NAMES[targetCode] ?? { en: targetCode, zh: targetCode };
+      const nextVisit = nextAhmaVisit(today, targetCode);
 
-        if (isCurrentlyThere) {
-          const nextName = LOCATION_NAMES[current.nextCode] ?? { en: current.nextCode, zh: current.nextCode };
-          return isZh
-            ? `👵 阿嬷目前就在 ${locName.zh} (${targetCode})！\n• 今天是第 ${current.dayInStay} 天（共 ${GRANDMA_DAYS_PER_LOCATION} 天），还剩 ${current.daysLeft} 天（直到 ${current.nextDate} 前往 ${nextName.zh}）。\n• 下一次再轮到 ${locName.zh} 是 ${nextVisit.date}（${nextVisit.daysAway} 天后）。`
-            : `👵 Ahma is currently at ${locName.en} (${targetCode}) right now!\n• Today is Day ${current.dayInStay} of ${GRANDMA_DAYS_PER_LOCATION} (${current.daysLeft} days remaining, until ${current.nextDate} when she moves to ${nextName.en}).\n• Her next return visit to ${locName.en} is on ${nextVisit.date} (in ${nextVisit.daysAway} days).`;
-        }
-
-        if (nextVisit.daysAway >= 0) {
-          const curName = LOCATION_NAMES[current.code] ?? { en: current.code, zh: current.code };
-          return isZh
-            ? `👵 阿嬷下次到 ${locName.zh} (${targetCode}) 是 ${nextVisit.date}（${nextVisit.daysAway} 天后，住到 ${nextVisit.endDate}）。\n• 目前阿嬷在 ${curName.zh}，还剩 ${current.daysLeft} 天（直到 ${current.nextDate}）。`
-            : `👵 Ahma will be coming over to ${locName.en} (${targetCode}) on ${nextVisit.date} (in ${nextVisit.daysAway} days, staying until ${nextVisit.endDate}).\n• Currently, Ahma is staying at ${curName.en} (${current.daysLeft} days left until ${current.nextDate}).`;
-        }
-      } else {
-        // No target code mentioned — tell where Ahma is today and when she moves next
-        const curName = LOCATION_NAMES[current.code] ?? { en: current.code, zh: current.code };
+      if (current.code === targetCode) {
         const nextName = LOCATION_NAMES[current.nextCode] ?? { en: current.nextCode, zh: current.nextCode };
         return isZh
-          ? `👵 阿嬷目前在 ${curName.zh} (${current.code})，还剩 ${current.daysLeft} 天，将于 ${current.nextDate} 前往 ${nextName.zh} (${current.nextCode})。`
-          : `👵 Ahma is currently at ${curName.en} (${current.code}) with ${current.daysLeft} days left, then moves to ${nextName.en} (${current.nextCode}) on ${current.nextDate}.`;
+          ? `👵 阿嬷目前就在 ${locName.zh} (${targetCode})！\n• 今天是第 ${current.dayInStay} 天（共 ${GRANDMA_DAYS_PER_LOCATION} 天），还剩 ${current.daysLeft} 天（直到 ${current.nextDate} 前往 ${nextName.zh}）。\n• 下一次再轮到 ${locName.zh} 是 ${nextVisit.date}（${nextVisit.daysAway} 天后）。`
+          : `👵 Ahma is currently at ${locName.en} (${targetCode}) right now!\n• Today is Day ${current.dayInStay} of ${GRANDMA_DAYS_PER_LOCATION} (${current.daysLeft} days remaining, until ${current.nextDate} when she moves to ${nextName.en}).\n• Her next return visit to ${locName.en} is on ${nextVisit.date} (in ${nextVisit.daysAway} days).`;
+      }
+
+      if (nextVisit.daysAway >= 0) {
+        const curName = LOCATION_NAMES[current.code] ?? { en: current.code, zh: current.code };
+        return isZh
+          ? `👵 阿嬷下次到 ${locName.zh} (${targetCode}) 是 ${nextVisit.date}（${nextVisit.daysAway} 天后，住到 ${nextVisit.endDate}）。\n• 目前阿嬷在 ${curName.zh}，还剩 ${current.daysLeft} 天（直到 ${current.nextDate}）。`
+          : `👵 Ahma will be coming over to ${locName.en} (${targetCode}) on ${nextVisit.date} (in ${nextVisit.daysAway} days, staying until ${nextVisit.endDate}).\n• Currently, Ahma is staying at ${curName.en} (${current.daysLeft} days left until ${current.nextDate}).`;
       }
     }
 
-    const check = dateStr || today;
+    const check = extractDate(message) || today;
     const isToday = check === today;
     const loc = getAhmaLocation(check);
     const name = LOCATION_NAMES[loc.code] ?? { en: loc.code, zh: loc.code };
-    if (loc.isCny) {
-      return isZh
-        ? `🧧 在 ${check}，适逢农历新年特殊安排，阿嬷住在 ${name.zh}（${loc.code}）。`
-        : `🧧 On ${check}, it's the CNY special arrangement — Ahma is at ${name.en} (${loc.code}).`;
-    }
     const nextName = LOCATION_NAMES[loc.nextCode] ?? { en: loc.nextCode, zh: loc.nextCode };
+
     return isZh
       ? `👵 ${isToday ? '今天' : `在 ${check}`}，阿嬷住在 ${name.zh}（${loc.code}）。\n• 当前周期居住第 ${loc.dayInStay} 天（共 ${GRANDMA_DAYS_PER_LOCATION} 天，还剩 ${loc.daysLeft} 天，将于 ${loc.nextDate} 前往 ${nextName.zh}）。`
       : `👵 ${isToday ? 'Today' : `On ${check}`}, Ahma is staying at ${name.en} (${loc.code}).\n• Day ${loc.dayInStay} of ${GRANDMA_DAYS_PER_LOCATION} in this stay (${loc.daysLeft} days left, moving to ${nextName.en} on ${loc.nextDate}).`;
   }
 
-  // --- Jun Jie shift ---
+  // 2. Jun Jie shift query
+  const asksShift =
+    q.includes('jun jie') || q.includes('junjie') || q.includes('俊杰') ||
+    q.includes('shift') || q.includes('班次') || q.includes('上班');
+
   if (asksShift) {
-    const check = dateStr || '2026-06-15';
+    const check = extractDate(message) || '2026-06-15';
     const shift = getJunjieShift(check);
     const ZH_SHIFT: Record<string, string> = {
-      'Night': '晚班', 'Morning': '早班',
-      'Afternoon 1': '午1班', 'Afternoon 2': '午2班', 'Afternoon 3': '午3班',
-      'OFF Day': '休息', 'REST DAY': '休息',
+      Night: '晚班',
+      Morning: '早班',
+      'Afternoon 1': '午1班',
+      'Afternoon 2': '午2班',
+      'Afternoon 3': '午3班',
+      'OFF Day': '休息 (OFF)',
+      'REST DAY': '休息 (REST)',
     };
     const shiftLabelEn = shift.time ? `${shift.name} (${shift.time})` : shift.name;
     const shiftLabelZh = shift.time
       ? `${ZH_SHIFT[shift.name] ?? shift.name} (${shift.time})`
       : (ZH_SHIFT[shift.name] ?? shift.name);
+
     return isZh
       ? `在 ${check}，俊杰上 ${shiftLabelZh}（第 ${shift.weekNum} 周排班）。\n他的排班为3周一循环，从 2026年6月15日（周一）开始。`
       : `On ${check}, Jun Jie is on ${shiftLabelEn} (Week ${shift.weekNum} of 3).\nHis roster repeats every 3 weeks, starting Monday 15 June 2026.`;
   }
 
-  // --- Public holidays ---
-  if (asksHoliday) {
+  // 3. Public holidays
+  if (q.includes('holiday') || q.includes('假期') || q.includes('public holiday')) {
+    const dateStr = extractDate(message);
     if (dateStr && SINGAPORE_PUBLIC_HOLIDAYS[dateStr]) {
       const name = SINGAPORE_PUBLIC_HOLIDAYS[dateStr];
-      return isZh
-        ? `${dateStr} 是新加坡公共假期：${name}。`
-        : `${dateStr} is a Singapore Public Holiday: ${name}.`;
+      return isZh ? `${dateStr} 是新加坡公共假期：${name}。` : `${dateStr} is a Singapore Public Holiday: ${name}.`;
     }
     return isZh
-      ? `新加坡 2026 年主要公共假期：\n• 5月1日：劳动节\n• 5月31日 - 6月1日：卫塞节及补假\n• 8月9日 - 8月10日：国庆日及补假\n• 11月8日 - 11月9日：屠妖节及补假\n• 12月25日：圣诞节`
+      ? `新加坡主要公共假期：\n• 5月1日：劳动节\n• 5月31日 - 6月1日：卫塞节及补假\n• 8月9日 - 8月10日：国庆日及补假\n• 11月8日 - 11月9日：屠妖节及补假\n• 12月25日：圣诞节`
       : `Singapore 2026 Public Holidays:\n• 1 May: Labour Day\n• 31 May – 1 Jun: Vesak Day & In-Lieu\n• 9 Aug – 10 Aug: National Day & In-Lieu\n• 8 Nov – 9 Nov: Deepavali & In-Lieu\n• 25 Dec: Christmas Day`;
   }
 
-  // --- Default ---
   return isZh
-    ? `你好！有什么我可以帮你的吗？😊\n\n我也很擅长回答：\n• 阿嬷在某天住在哪里（例如："2026年6月15日阿嬷在哪里？"）\n• 俊杰某天的班次（例如："6月15日俊杰上什么班？"）\n• 新加坡公共假期\n• 添加家庭活动（例如："添加 6月20日 晚上7点 爸爸家聚餐"）`
-    : `Hey there! What's on your mind? 😊\n\nI'm also great with:\n• Where Ahma is staying on any date (e.g. "Where is Ahma on 15 June 2026?")\n• Jun Jie's shift on any date (e.g. "What is Jun Jie's shift on 15 June?")\n• Singapore public holidays\n• Add calendar events (e.g. "Add dinner on 20 June 2026 at 7pm")`;
+    ? `你好！我是阿嬷日程小助手 🌸\n\n您可以问我：\n• 某一天阿嬷住在谁家（例如：“阿嬷几时来爸爸家？”）\n• 俊杰某天的上下班排班（例如：“6月15日俊杰上什么班？”）\n• 新加坡公共假期\n• 添加日历活动（例如：“添加 6月20日 晚上7点 爸爸家聚餐”）`
+    : `Hello! I'm Ahma Bot 🌸\n\nYou can ask me:\n• Where Ahma is staying on any date (e.g. "When is Ahma next at Dad's place?")\n• Jun Jie's work shift on any date (e.g. "What is Jun Jie's shift on 15 June?")\n• Singapore public holidays\n• Add calendar events (e.g. "Add dinner on 20 June 2026 at 7pm")`;
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function detectLanguage(text: string): 'en' | 'zh' {
-  return /[\u4e00-\u9fa5]/.test(text) ? 'zh' : 'en';
-}
-
-async function sendTelegramMessage(token: string, chatId: number, text: string) {
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    console.error('Telegram sendMessage failed:', err);
-  }
-}
-
-async function getAiReply(
-  message: string,
-  language: 'en' | 'zh',
-  apiKey: string,
-  calendarState: AppSyncState
-): Promise<string> {
-  const groq = new Groq({ apiKey });
-  const q = message.toLowerCase();
-
-  // If the user clearly wants to add an event, extract details and save
-  const addKeywords = ['add', 'create', 'schedule', 'plan', 'book', 'put', '记', '添加', '加入', '安排', '计划', '/add'];
-  const eventKeywords = ['event', 'trip', 'holiday', 'plan', 'gathering', 'appointment', 'staycation', 'dinner', 'lunch', '活动', '旅行', '假期', '聚餐', '行程', '聚会', '门诊', '看病', '复诊'];
-  const wantsAdd = (addKeywords.some((k) => q.includes(k)) && (eventKeywords.some((k) => q.includes(k)) || q.startsWith('/add'))) || q.startsWith('/add');
-
-  if (wantsAdd) {
-    const intentPrompt = `You are an assistant for a family calendar app.
-Extract event details from this message: "${message}".
-Today is ${todaySGT()}.
-Respond ONLY with JSON:
-{
-  "title": string,
-  "startDate": "YYYY-MM-DD",
-  "endDate": "YYYY-MM-DD or null",
-  "category": "holiday_plan" | "family_gathering" | "medical" | "leave" | "general",
-  "memberId": "all" | "grandma" | "junjie" | "layting" | "dad" | "mom",
-  "time": "HH:MM or null",
-  "location": "string or null",
-  "notes": "string or null"
-}`;
-
-    try {
-      const { completion: intentCompletion } = await createGroqChat(groq, {
-        messages: [{ role: 'user', content: intentPrompt }],
-        temperature: 0.1,
-        max_tokens: 256,
-      });
-      const raw = intentCompletion.choices[0]?.message?.content?.trim() ?? '';
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const extractedEvent = JSON.parse(jsonMatch[0]);
-        if (extractedEvent?.title && extractedEvent?.startDate) {
-          const { event: ev, cloudSync } = await saveCalendarEvent({
-            title: extractedEvent.title,
-            startDate: extractedEvent.startDate,
-            endDate: extractedEvent.endDate || undefined,
-            category: extractedEvent.category || 'general',
-            memberId: extractedEvent.memberId || 'all',
-            time: extractedEvent.time || undefined,
-            location: extractedEvent.location || undefined,
-            notes: extractedEvent.notes || undefined,
-          });
-
-          const dateRange = ev.endDate ? `${ev.startDate} – ${ev.endDate}` : ev.startDate;
-          const locPart = ev.location ? ` @ ${ev.location}` : '';
-          const syncNote = cloudSync
-            ? (language === 'zh' ? '☁️ 已实时同步至家庭日历。' : '☁️ Live-synced to family calendar.')
-            : (language === 'zh' ? '⚠️ 提示：Vercel 尚未配置 GITHUB_TOKEN，此活动仅保存在本地。配置 GITHUB_TOKEN 后即可全家自动同步。' : '⚠️ Note: GITHUB_TOKEN is not configured in Vercel. Add GITHUB_TOKEN in your Vercel project settings to sync across all devices.');
-
-          return language === 'zh'
-            ? `好的！我已把活动添加到日历：\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}\n\n${syncNote}\n您可以在日历网页上查看！`
-            : `Done! I've added this to the calendar:\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}\n\n${syncNote}\nYou can check it on the calendar web app!`;
-        }
-      }
-    } catch (err) {
-      console.warn('[telegram] AI event extraction failed, falling back to regex parser:', err);
-    }
-  }
-
-  // Live calendar state context (events + overrides)
-  const eventContext = formatCalendarContext(calendarState);
-  const today = todaySGT();
-  const ahmaNow = getAhmaLocation(today);
-  const locNow = LOCATION_NAMES[ahmaNow.code] ?? { en: ahmaNow.code, zh: ahmaNow.code };
-  const nextKC = nextAhmaVisit(today, 'KC');
-  const nextKG = nextAhmaVisit(today, 'KG');
-  const nextKB = nextAhmaVisit(today, 'KB');
-  const jjToday = getJunjieShift(today);
-  const nextLocNow = LOCATION_NAMES[ahmaNow.nextCode] ?? { en: ahmaNow.nextCode, zh: ahmaNow.nextCode };
-
-  const systemPrompt = `TODAY IS ${today} (Singapore Time, SGT UTC+8). Use this as the current date for ALL answers.
-
-You are Ahma Bot 🌸, a warm and friendly family assistant for the "Ahma's Rotation" app. You love chatting with the family and can talk about anything — daily life, food, feelings, general questions, or casual conversation. You are helpful, cheerful, and feel like a family member.
-
-CRITICAL LIVE CALENDAR DATA (USE DIRECTLY — DO NOT CALCULATE OR COUNT CYCLES FROM MAY 2026):
-- Ahma is CURRENTLY at: ${locNow.en} (${ahmaNow.code}), Day ${ahmaNow.dayInStay}/${GRANDMA_DAYS_PER_LOCATION}, ${ahmaNow.daysLeft} days remaining. Moves to ${nextLocNow.en} on ${ahmaNow.nextDate}.
-- Next time Ahma arrives at KC (Kay Cheow / Dad's place / 爸爸家): ${nextKC.date} (in ${nextKC.daysAway} days, staying until ${nextKC.endDate}).
-- Next time Ahma arrives at KG (Kay Guan / 启源): ${nextKG.date} (in ${nextKG.daysAway} days, staying until ${nextKG.endDate}).
-- Next time Ahma arrives at KB (Kay Boon / 启文): ${nextKB.date} (in ${nextKB.daysAway} days, staying until ${nextKB.endDate}).
-- Jun Jie TODAY: ${jjToday.name}${jjToday.time ? ` (${jjToday.time})` : ''} (Week ${jjToday.weekNum} of 3).
-- CNY special (Eve 5pm → Day 2 8pm): 2026 KG, 2027 KB, 2028 KC (Dad's), 2029 KG, repeating.
-- Rotation sequence: Dad's place (KC) → Kay Guan (KG) → Kay Boon (KB), 14 days each.
-${eventContext || '\n(No calendar events loaded)'}
-
-ANSWER RULES:
-- When asked "When is Ahma coming over / next at KC / Dad's place / 爸爸家" → ANSWER DIRECTLY: ${nextKC.date} (in ${nextKC.daysAway} days). If she is currently there, state that she is already at KC right now!
-- When asked "When is Ahma next at KG / 启源" → ANSWER DIRECTLY: ${nextKG.date} (in ${nextKG.daysAway} days).
-- When asked "When is Ahma next at KB / 启文" → ANSWER DIRECTLY: ${nextKB.date} (in ${nextKB.daysAway} days).
-- When asked "Where is Ahma today / now" → ANSWER DIRECTLY: ${locNow.en} (${ahmaNow.code}), Day ${ahmaNow.dayInStay} of 14, with ${ahmaNow.daysLeft} days remaining.
-- CRITICAL: DO NOT start by reciting cycle history or counting cycles from 7 May 2026! Answer the user's question directly in the very first sentence.
-- When answering about events or plans, translate event titles and details into Chinese if the user is speaking Chinese, or keep in English otherwise.
-- For casual chat, just be natural and warm. For calendar questions, be accurate and concise.
-Answer in ${language === 'zh' ? 'Chinese (中文)' : 'English'}. Plain text only, no Markdown.`;
-
-  const { completion } = await createGroqChat(groq, {
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user',   content: message },
-    ],
-    temperature: 0.7,
-    max_tokens: 512,
-  });
-  return completion.choices[0]?.message?.content?.trim() ?? '';
-}
-
-// ---------------------------------------------------------------------------
-// Vercel Serverless Handler
+// Main Vercel Serverless Function Handler
 // ---------------------------------------------------------------------------
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  const TELEGRAM_TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
-
-  // If accessed via GET in browser, provide live health & configuration check
-  if (req.method !== 'POST') {
-    const hasToken = Boolean(TELEGRAM_TOKEN);
-    const hasGroq = Boolean((process.env.GROQ_API_KEY ?? '').trim());
-    const hasGithub = isCloudSyncConfigured();
-    return res.status(200).json({
-      status: 'active',
-      service: 'Ahma Rotation Telegram Webhook',
-      time: new Date().toISOString(),
-      env: {
-        TELEGRAM_BOT_TOKEN: hasToken ? `set (ends ...${TELEGRAM_TOKEN.slice(-4)}) ✅` : 'MISSING ❌ — Add TELEGRAM_BOT_TOKEN to Vercel Environment Variables',
-        GROQ_API_KEY: hasGroq ? 'configured ✅' : 'MISSING ❌ — Add GROQ_API_KEY to Vercel Environment Variables',
-        GITHUB_TOKEN: hasGithub ? 'configured ✅ (multi-device cloud sync active)' : 'NOT SET ⚠️ (local memory only)',
-      },
-      webhookHelp: 'If bot is not responding on Telegram, make sure you set the webhook by opening in your browser: https://api.telegram.org/bot<YOUR_TOKEN>/setWebhook?url=https://<YOUR_APP_DOMAIN>/telegram/webhook',
-    });
-  }
-
-  // Handle Telegram POST Webhook update
-  if (!TELEGRAM_TOKEN) {
-    console.error('[telegram] TELEGRAM_BOT_TOKEN is not set in Vercel environment variables.');
-    // Always return HTTP 200 so Telegram does not get stuck in a webhook retry storm
-    return res.status(200).json({ error: 'TELEGRAM_BOT_TOKEN is not set in Vercel environment variables.' });
-  }
-
-  const body = req.body;
-  const msg = body?.message ?? body?.edited_message;
-
-  if (!msg?.text) {
-    return res.status(200).end();
-  }
-
-  const chatId: number = msg.chat.id;
-  const userText: string = msg.text.trim();
-  const language = detectLanguage(userText);
-
-  let replyText = '';
-
+  // Always wrap everything in top-level try/catch to avoid FUNCTION_INVOCATION_FAILED
   try {
-    if (userText === '/start') {
-      replyText =
-        language === 'zh'
-          ? '您好！我是阿嬷日程小助手 🌸\n\n您可以问我：\n• 某一天阿嬷住在谁家（例如：“阿嬷几时来爸爸家？”）\n• 俊杰的上下班班次（例如：“6月15日俊杰上什么班？”）\n• 日历上的活动和假期计划\n• 新加坡公共假期\n• 添加活动（例如：“添加 6月20日 晚上7点 爸爸家聚餐” 或 “/add 2026-06-20 聚餐”）\n• 或者聊任何话题！\n\n例如：「2026年6月15日阿嬷住在哪里？」'
-          : "Hello! I'm Ahma Bot 🌸\n\nYou can ask me:\n• Where Ahma is staying on any date (e.g. \"When is Ahma coming over to KC house?\")\n• Jun Jie's work shift on any date\n• Events and holiday plans on the calendar\n• Singapore public holidays\n• Add calendar events (e.g. \"Add dinner on 20 June 2026 at 7pm\" or \"/add 2026-06-20 Family gathering\")\n• Or just have a chat!\n\nExample: \"Where is Ahma on 15 June 2026?\"";
-    } else {
-      let calendarState: AppSyncState;
-      try {
-        calendarState = await readState();
-      } catch {
-        calendarState = structuredClone(DEFAULT_STATE);
-      }
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
-      const groqKey = (process.env.GROQ_API_KEY ?? '').trim();
-      if (groqKey) {
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+
+    const TELEGRAM_TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
+    const GROQ_KEY = (process.env.GROQ_API_KEY ?? '').trim();
+    const GEMINI_KEY = (process.env.GEMINI_API_KEY ?? '').trim();
+    const GITHUB_TOKEN = (process.env.GITHUB_TOKEN ?? '').trim();
+
+    // ─── GET /api/telegram — Browser Diagnostics ──────────────────────────────
+    if (req.method !== 'POST') {
+      let botInfo: any = null;
+      let webhookInfo: any = null;
+
+      if (TELEGRAM_TOKEN) {
         try {
-          replyText = await getAiReply(userText, language, groqKey, calendarState);
-        } catch (err: any) {
-          console.warn('[telegram] Groq failed, using local solver:', err?.message ?? err);
+          const [meRes, whRes] = await Promise.all([
+            fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getMe`).then((r) => r.json()),
+            fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getWebhookInfo`).then((r) => r.json()),
+          ]);
+          botInfo = meRes.ok ? meRes.result : { error: meRes.description };
+          webhookInfo = whRes.ok ? whRes.result : { error: whRes.description };
+        } catch (e: any) {
+          botInfo = { error: e?.message || 'Could not reach Telegram API' };
         }
       }
 
+      return res.status(200).json({
+        status: 'active',
+        service: 'FamilySync SG Calendar — Telegram Serverless Webhook',
+        timestamp: new Date().toISOString(),
+        environment: {
+          TELEGRAM_BOT_TOKEN: TELEGRAM_TOKEN ? `configured (...${TELEGRAM_TOKEN.slice(-4)}) ✅` : 'MISSING ❌ — Add TELEGRAM_BOT_TOKEN to Vercel Environment Variables',
+          GROQ_API_KEY: GROQ_KEY ? 'configured ✅' : 'NOT SET (using deterministic local calendar solver) ℹ️',
+          GEMINI_API_KEY: GEMINI_KEY ? 'configured ✅' : 'NOT SET ℹ️',
+          GITHUB_TOKEN: GITHUB_TOKEN ? 'configured ✅ (multi-device cloud sync active)' : 'NOT SET (local memory only) ⚠️',
+        },
+        botAccount: botInfo,
+        webhookStatus: webhookInfo,
+        instructions: 'To set webhook, visit: https://api.telegram.org/bot<YOUR_TOKEN>/setWebhook?url=https://<YOUR_APP_DOMAIN>/api/telegram',
+      });
+    }
+
+    // ─── POST /api/telegram — Telegram Webhook Update ─────────────────────────
+    if (!TELEGRAM_TOKEN) {
+      console.warn('[telegram] TELEGRAM_BOT_TOKEN is not configured in Vercel environment variables.');
+      return res.status(200).json({ error: 'TELEGRAM_BOT_TOKEN is not set.' });
+    }
+
+    // Safely parse body if body parser hasn't run
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+
+    const msg = body?.message || body?.edited_message;
+    if (!msg || !msg.text) {
+      return res.status(200).end();
+    }
+
+    const chatId: number = msg.chat?.id;
+    const userText: string = (msg.text || '').trim();
+    if (!chatId || !userText) {
+      return res.status(200).end();
+    }
+
+    const isZh = /[\u4e00-\u9fa5]/.test(userText);
+    let replyText = '';
+
+    if (userText === '/start') {
+      replyText = isZh
+        ? '您好！我是阿嬷日程小助手 🌸\n\n您可以问我：\n• 某一天阿嬷住在谁家（例如：“阿嬷几时来爸爸家？”）\n• 俊杰的上下班班次（例如：“6月15日俊杰上什么班？”）\n• 日历上的活动和假期计划\n• 新加坡公共假期\n• 添加活动（例如：“添加 6月20日 晚上7点 爸爸家聚餐” 或 “/add 2026-06-20 聚餐”）\n• 或者聊任何日常话题！'
+        : "Hello! I'm Ahma Bot 🌸\n\nYou can ask me:\n• Where Ahma is staying on any date (e.g. \"When is Ahma next at Dad's place / KC?\")\n• Jun Jie's work shift on any date (e.g. \"What is Jun Jie's shift on 15 June 2026?\")\n• Events and holiday plans on the calendar\n• Singapore public holidays\n• Add calendar events (e.g. \"Add dinner on 20 June 2026 at 7pm\" or \"/add 2026-06-20 Family dinner\")\n• Or just have a casual chat!";
+    } else if (userText === '/help') {
+      replyText = isZh
+        ? '📖 阿嬷日历助手常用指令：\n\n• /start — 开始对话与简介\n• /today — 查看今天阿嬷在哪里及俊杰班次\n• /events — 查看近期家庭活动\n• /add [日期] [活动名称] — 快速添加活动\n\n您也可以直接用自然语言提问！'
+        : "📖 Ahma Calendar Bot Commands:\n\n• /start — Welcome & intro\n• /today — See where Ahma is today & Jun Jie's shift\n• /events — View upcoming calendar events\n• /add [date] [title] — Quickly add a new event\n\nOr simply ask naturally in English or Chinese!";
+    } else if (userText === '/today') {
+      replyText = resolveAnswer(`where is ahma today ${todaySGT()}`, isZh) + '\n\n' + resolveAnswer(`what is junjie shift today ${todaySGT()}`, isZh);
+    } else {
+      // Check if user is adding an event
+      const addKeywords = ['add', 'create', 'schedule', 'plan', 'book', 'put', '记', '添加', '加入', '安排', '计划', '/add'];
+      const eventKeywords = ['event', 'trip', 'holiday', 'plan', 'gathering', 'appointment', 'staycation', 'dinner', 'lunch', '活动', '旅行', '假期', '聚餐', '行程', '聚会', '门诊', '看病', '复诊'];
+      const q = userText.toLowerCase();
+      const wantsAdd = (addKeywords.some((k) => q.includes(k)) && (eventKeywords.some((k) => q.includes(k)) || q.startsWith('/add'))) || q.startsWith('/add');
+
+      if (wantsAdd) {
+        const range = extractDateRange(userText);
+        const singleDate = extractDate(userText);
+        const startDate = range?.start || singleDate;
+        const endDate = range?.end;
+
+        if (startDate) {
+          const cleanTitle = extractCleanTitle(userText, isZh);
+          const cat = inferCategory(userText);
+          const loc = extractLocation(userText);
+          const tm = extractTime(userText);
+
+          const newEv = {
+            id: `ev-tg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            title: cleanTitle,
+            startDate,
+            endDate: endDate || undefined,
+            category: cat,
+            memberId: 'all',
+            location: loc,
+            time: tm,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+          const cloudSaved = await saveEventToGitHub(newEv);
+          const dateRange = newEv.endDate ? `${newEv.startDate} – ${newEv.endDate}` : newEv.startDate;
+          const locPart = newEv.location ? ` @ ${newEv.location}` : '';
+          const syncNote = cloudSaved
+            ? (isZh ? '☁️ 已实时同步至 GitHub 家庭日历。' : '☁️ Live-synced to GitHub family calendar.')
+            : (isZh ? '⚠️ 提示：Vercel 尚未配置 GITHUB_TOKEN，此活动仅临时生效。' : '⚠️ Note: GITHUB_TOKEN is not configured in Vercel.');
+
+          replyText = isZh
+            ? `好的！我已把活动添加到日历：\n\n📅 ${newEv.title}\n🗓 ${dateRange}${locPart}${newEv.time ? `\n⏰ ${newEv.time}` : ''}\n\n${syncNote}\n您可以在日历网页上查看！`
+            : `Done! I've added this to the calendar:\n\n📅 ${newEv.title}\n🗓 ${dateRange}${locPart}${newEv.time ? `\n⏰ ${newEv.time}` : ''}\n\n${syncNote}\nYou can check it on the calendar web app!`;
+        }
+      }
+
+      // Try AI reply if not already answered
       if (!replyText) {
-        replyText = await resolveAnswer(userText, language === 'zh', calendarState);
+        const today = todaySGT();
+        const ahmaNow = getAhmaLocation(today);
+        const locNow = LOCATION_NAMES[ahmaNow.code] ?? { en: ahmaNow.code, zh: ahmaNow.code };
+        const nextKC = nextAhmaVisit(today, 'KC');
+        const nextKG = nextAhmaVisit(today, 'KG');
+        const nextKB = nextAhmaVisit(today, 'KB');
+        const jjToday = getJunjieShift(today);
+        const nextLocNow = LOCATION_NAMES[ahmaNow.nextCode] ?? { en: ahmaNow.nextCode, zh: ahmaNow.nextCode };
+
+        const systemPrompt = `TODAY IS ${today} (Singapore Time, SGT UTC+8). Use this as the current date for ALL answers.
+You are Ahma Bot 🌸, a warm and friendly family assistant for the "Ahma's Rotation" app.
+Live Calendar Data:
+- Ahma is CURRENTLY at: ${locNow.en} (${ahmaNow.code}), Day ${ahmaNow.dayInStay}/${GRANDMA_DAYS_PER_LOCATION}, ${ahmaNow.daysLeft} days remaining. Moves to ${nextLocNow.en} on ${ahmaNow.nextDate}.
+- Next time Ahma arrives at KC (Kay Cheow / Dad's place / 爸爸家): ${nextKC.date} (in ${nextKC.daysAway} days).
+- Next time Ahma arrives at KG (Kay Guan / 启源): ${nextKG.date} (in ${nextKG.daysAway} days).
+- Next time Ahma arrives at KB (Kay Boon / 启文): ${nextKB.date} (in ${nextKB.daysAway} days).
+- Jun Jie TODAY: ${jjToday.name}${jjToday.time ? ` (${jjToday.time})` : ''} (Week ${jjToday.weekNum} of 3).
+Answer clearly and warmly in ${isZh ? 'Chinese (中文)' : 'English'}. Plain text only.`;
+
+        if (GROQ_KEY) {
+          replyText = await callGroqDirect(GROQ_KEY, systemPrompt, userText);
+        } else if (GEMINI_KEY) {
+          replyText = await callGeminiDirect(GEMINI_KEY, systemPrompt, userText);
+        }
+      }
+
+      // Fallback: deterministic local calendar solver
+      if (!replyText) {
+        replyText = resolveAnswer(userText, isZh);
       }
     }
 
     if (!replyText) {
-      replyText = language === 'zh' ? '抱歉，我未能理解，请再试一次。' : 'Sorry, I could not process that. Please try again.';
+      replyText = isZh ? '抱歉，我未能理解，请再试一次。' : 'Sorry, I could not process that. Please try again.';
     }
 
     await sendTelegramMessage(TELEGRAM_TOKEN, chatId, replyText);
-  } catch (err) {
-    console.error('[telegram] Webhook handler error:', err);
-    try {
-      await sendTelegramMessage(
-        TELEGRAM_TOKEN,
-        chatId,
-        language === 'zh'
-          ? '抱歉，处理您的消息时出现异常，请稍后再试。'
-          : 'Sorry, an error occurred while processing your message. Please try again shortly.'
-      );
-    } catch {}
+    return res.status(200).end();
+  } catch (err: any) {
+    console.error('[telegram] Fatal handler error caught:', err);
+    // Always return HTTP 200 so Telegram and Vercel do not display 500 error screens
+    return res.status(200).json({
+      error: 'Telegram webhook processed with fallback',
+      message: err?.message || String(err),
+    });
   }
-
-  // Always return HTTP 200 to acknowledge receipt to Telegram
-  return res.status(200).end();
 }

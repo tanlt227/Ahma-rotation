@@ -8,20 +8,20 @@
     }
   },
   "rewrites": [
-    { "source": "/api/events",          "destination": "/api/events"    },
+    { "source": "/api/events",          "destination": "/api/events" },
     { "source": "/api/events/:id",      "destination": "/api/events?id=:id" },
     { "source": "/api/overrides",       "destination": "/api/overrides" },
     { "source": "/api/overrides/:id",   "destination": "/api/overrides?id=:id" },
-    { "source": "/api/members",         "destination": "/api/members"   },
-    { "source": "/api/members/:id",     "destination": "/api/members?id=:id"   },
-    { "source": "/api/state",           "destination": "/api/state"     },
-    { "source": "/api/settings",        "destination": "/api/settings"  },
-    { "source": "/api/reset",           "destination": "/api/reset"     },
-    { "source": "/api/chat",            "destination": "/api/chat"      },
-    { "source": "/api/translate",        "destination": "/api/translate" },
-    { "source": "/api/debug",            "destination": "/api/debug"     },
-    { "source": "/api/telegram",         "destination": "/api/telegram"  },
-    { "source": "/telegram/webhook",    "destination": "/api/telegram"  },
-    { "source": "/(.*)",                "destination": "/index.html"    }
+    { "source": "/api/members",         "destination": "/api/members" },
+    { "source": "/api/members/:id",     "destination": "/api/members?id=:id" },
+    { "source": "/api/state",           "destination": "/api/state" },
+    { "source": "/api/settings",        "destination": "/api/settings" },
+    { "source": "/api/reset",           "destination": "/api/reset" },
+    { "source": "/api/chat",            "destination": "/api/chat" },
+    { "source": "/api/translate",       "destination": "/api/translate" },
+    { "source": "/api/debug",           "destination": "/api/debug" },
+    { "source": "/api/telegram",        "destination": "/api/telegram" },
+    { "source": "/telegram/webhook",    "destination": "/api/telegram" },
+    { "source": "/(.*)",                "destination": "/index.html" }
   ]
 }
