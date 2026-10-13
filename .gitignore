@@ -6,5 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
-data/
+# Local dev server state — production state lives in GitHub Contents API
+data/calendar-data.json
 bun.lock
