@@ -1,10 +1,10 @@
 import Groq from 'groq-sdk';
 
 export const GROQ_CANDIDATE_MODELS = [
-  'llama-3.3-70b-versatile',
-  'llama3-70b-8192',
-  'llama3-8b-8192',
+  'qwen/qwen3.8-27b',
+  'openai/gpt-oss-20b',
   'llama-3.1-8b-instant',
+  'llama3-8b-8192',
 ];
 
 export type GroqChatParams = Omit<Parameters<Groq['chat']['completions']['create']>[0], 'model'>;

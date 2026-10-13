@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Groq from 'groq-sdk';
-import { readState } from '../lib/state';
+import { readState, updateState } from '../lib/state';
 import { createGroqChat } from '../lib/groq';
 
 // ---------------------------------------------------------------------------
@@ -357,8 +357,8 @@ function resolveLocalReply(message: string, lang: 'en' | 'zh', today: string): s
   }
 
   return isZh
-    ? `您好！我可以帮您查询阿嬷轮流日程（例如："阿嬷几时来爸爸家？"）、俊杰排班或家庭活动！`
-    : `Hello! I can help you check Ahma's rotation schedule (e.g. "When is Ahma coming over to KC house?"), Jun Jie's shifts, or family calendar events!`;
+    ? `您好！我可以帮您查询阿嬷轮流日程（例如："阿嬷几时来爸爸家？"）、俊杰排班或家庭活动！或者也可以帮您添加活动哦 😊`
+    : `Hey there! 😊 I can help with Ahma's rotation schedule, Jun Jie's shifts, family calendar events, or just have a chat! Try asking "When is Ahma next at Dad's?" or "Add a family dinner on 20 Oct 2026".`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -409,7 +409,8 @@ ANSWER RULES:
 - "is jj/jun jie working on friday/monday/saturday" → find that day in the Next 7 days table and report his shift
 - For CNY questions → use the CNY special stays table above
 - For family events/plans → use FAMILY CALENDAR EVENTS above
-- For casual chat → just chat naturally, no calendar needed
+- For casual chat → just chat naturally, no calendar needed. You can talk about anything.
+- "add [event] on [date]" → respond with JSON on a SINGLE line at the END: EVENT_JSON:{"title":"...","startDate":"YYYY-MM-DD","category":"holiday_plan|family_gathering|medical|leave|general","memberId":"all"}
 - CRITICAL: Answer directly in the very first sentence. NEVER recite rotation history or count cycles from 7 May 2026.
 
 Keep answers short and direct (2-3 sentences). Plain text only.`;
@@ -419,7 +420,36 @@ Keep answers short and direct (2-3 sentences). Plain text only.`;
         { role: 'user',   content: message },
       ]);
 
-      if (reply) return res.status(200).json({ reply });
+      if (reply) {
+        // Check if the AI included an event to add (EVENT_JSON: marker)
+        const eventMarker = reply.match(/EVENT_JSON:(\{[^\n]+\})/);
+        if (eventMarker) {
+          const cleanReply = reply.replace(/EVENT_JSON:[^\n]+/, '').trim();
+          try {
+            const eventData = JSON.parse(eventMarker[1]);
+            if (eventData.title && eventData.startDate) {
+              const newEvent = {
+                id: `ev-chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                title: eventData.title,
+                startDate: eventData.startDate,
+                endDate: eventData.endDate,
+                category: eventData.category || 'general',
+                memberId: eventData.memberId || 'all',
+                time: eventData.time,
+                location: eventData.location,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              };
+              // Save via updateState directly (avoids needing APP_URL)
+              await updateState((draft) => {
+                draft.events.push(newEvent);
+              });
+              return res.status(200).json({ reply: cleanReply || `Done! Added "${newEvent.title}" on ${newEvent.startDate} to the calendar.`, newEvent });
+            }
+          } catch { /* ignore parse errors */ }
+        }
+        return res.status(200).json({ reply });
+      }
     } catch (err: any) {
       console.warn('[chat] Groq failed:', err?.message ?? err);
     }
