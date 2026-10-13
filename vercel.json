@@ -20,6 +20,7 @@
     { "source": "/api/chat",            "destination": "/api/chat" },
     { "source": "/api/translate",       "destination": "/api/translate" },
     { "source": "/api/debug",           "destination": "/api/debug" },
+    { "source": "/api/init-state",      "destination": "/api/init-state" },
     { "source": "/api/telegram",        "destination": "/api/telegram" },
     { "source": "/telegram/webhook",    "destination": "/api/telegram" },
     { "source": "/(.*)",                "destination": "/index.html" }
