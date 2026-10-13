@@ -25,7 +25,7 @@ export function isCloudSyncConfigured(): boolean {
 
 function ghConfig() {
   const token = process.env.GITHUB_TOKEN;
-  const repo  = process.env.GITHUB_REPO || 'tanlt227/Ahma-rotation';
+  const repo  = process.env.GITHUB_REPO || 'tanlt227/ahma-rotation';
   const ghPath = process.env.GITHUB_PATH || 'data/calendar-data.json';
 
   if (!token) {

@@ -44,8 +44,14 @@ export async function createGroqChat(
         err?.status === 404 ||
         err?.message?.includes('model_not_found') ||
         err?.error?.code === 'model_not_found';
-      if (isNotFound) {
-        console.warn(`[groq] Model ${model} not found or inaccessible, trying fallback...`);
+      const isRetryable =
+        err?.status === 429 || err?.status === 503 ||
+        String(err?.message ?? '').includes('429') ||
+        String(err?.message ?? '').includes('503') ||
+        String(err?.message ?? '').includes('overloaded') ||
+        String(err?.message ?? '').includes('rate_limit');
+      if (isNotFound || isRetryable) {
+        console.warn(`[groq] Model ${model} unavailable (${err?.status ?? 'unknown'}), trying next model...`);
         continue;
       }
       throw err;
