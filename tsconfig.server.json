@@ -2,8 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "ESNext",
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "lib": ["ES2022"],
+    "types": [],
     "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
     "noEmit": true

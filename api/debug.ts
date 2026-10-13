@@ -81,9 +81,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             eventCount: state.events?.length ?? 0,
             version: state.version,
             lastUpdated: state.lastUpdated,
+            sha: file.sha.slice(0, 8),
           };
         } else if (ghRes.status === 404) {
-          result.github = { status: 'file not found ⚠️ — will be created on first event save' };
+          result.github = { status: 'file not found ⚠️ — visit /api/init-state first' };
         } else {
           const body = await ghRes.text();
           result.github = { status: `failed ❌ HTTP ${ghRes.status}`, body };
@@ -93,6 +94,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } else {
       result.github = 'skipped — GITHUB_TOKEN not set';
+    }
+
+    // --- Test chat (joke) directly via Groq ---
+    if (groqKey) {
+      try {
+        const chatRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'openai/gpt-oss-20b',
+            messages: [
+              { role: 'system', content: 'You are a helpful assistant.' },
+              { role: 'user', content: 'Tell me a very short joke in one sentence.' },
+            ],
+            max_tokens: 64,
+            temperature: 0.7,
+          }),
+        });
+        const chatData = await chatRes.json();
+        if (chatRes.ok && chatData.choices?.[0]?.message?.content) {
+          result.chatTest = { status: 'success ✅', model: chatData.model, reply: chatData.choices[0].message.content.trim() };
+        } else {
+          result.chatTest = { status: 'failed ❌', error: chatData.error?.message ?? JSON.stringify(chatData) };
+        }
+      } catch (err: any) {
+        result.chatTest = { status: 'error ❌', error: err?.message };
+      }
     }
 
     return res.status(200).json(result);
