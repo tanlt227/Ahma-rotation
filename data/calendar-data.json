@@ -1,0 +1,69 @@
+{
+  "events": [],
+  "overrides": [],
+  "familyMembers": [
+    {
+      "id": "all",
+      "name": "Whole Family",
+      "relationship": "Family",
+      "color": "#10b981"
+    },
+    {
+      "id": "grandma",
+      "name": "Grandmother (阿嬷)",
+      "relationship": "Elder",
+      "color": "#0d9488"
+    },
+    {
+      "id": "junjie",
+      "name": "Jun Jie",
+      "relationship": "Son / Brother",
+      "color": "#8b5cf6"
+    },
+    {
+      "id": "layting",
+      "name": "Lay Ting",
+      "relationship": "Daughter / Sister",
+      "color": "#f43f5e"
+    },
+    {
+      "id": "dad",
+      "name": "Dad",
+      "relationship": "Father",
+      "color": "#3b82f6"
+    },
+    {
+      "id": "mom",
+      "name": "Mom",
+      "relationship": "Mother",
+      "color": "#ec4899"
+    }
+  ],
+  "settings": {
+    "grandmaAnchorDate": "2026-05-07",
+    "grandmaCycleDays": 14,
+    "grandmaSequence": [
+      "KC",
+      "KG",
+      "KB"
+    ],
+    "grandmaLocations": {
+      "KC": {
+        "name": "Kay Cheow",
+        "notes": "Kay Cheow (KC)"
+      },
+      "KG": {
+        "name": "Kay Guan",
+        "notes": "Kay Guan (KG)"
+      },
+      "KB": {
+        "name": "Kay Boon",
+        "notes": "Kay Boon (KB)"
+      }
+    },
+    "junjieAnchorDate": "2026-06-15",
+    "junjieCycleWeeks": 3
+  },
+  "lastUpdated": "2026-10-13T13:58:06.398Z",
+  "version": 1
+}
