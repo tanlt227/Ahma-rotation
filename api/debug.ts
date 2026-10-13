@@ -126,12 +126,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           method: 'POST',
           headers: { Authorization: `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'openai/gpt-oss-20b',
+            model: 'llama-3.1-8b-instant',
             messages: [
               { role: 'system', content: 'You are a helpful assistant.' },
               { role: 'user', content: 'Tell me a very short joke in one sentence.' },
             ],
-            max_tokens: 64,
+            max_tokens: 128,
             temperature: 0.7,
           }),
         });
