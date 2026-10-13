@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Groq from 'groq-sdk';
+import { readState } from '../lib/state';
 
 // ---------------------------------------------------------------------------
 // Schedule constants
@@ -181,29 +182,12 @@ ${cnySummary}
 }
 
 // ---------------------------------------------------------------------------
-// Fetch live events from GitHub state
+// Fetch live events from state (GitHub or local)
 // ---------------------------------------------------------------------------
 
 async function fetchLiveEvents(): Promise<string> {
-  const token = process.env.GITHUB_TOKEN;
-  const repo  = process.env.GITHUB_REPO;
-  const path  = process.env.GITHUB_PATH ?? 'data/calendar-data.json';
-
-  if (!token || !repo) return '(calendar events not available)';
-
   try {
-    const url = `https://api.github.com/repos/${repo}/contents/${path}`;
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    });
-    if (!res.ok) return '(could not fetch calendar events)';
-
-    const file = await res.json() as { content: string };
-    const state = JSON.parse(Buffer.from(file.content, 'base64').toString('utf-8'));
+    const state = await readState();
     const events = state.events ?? [];
 
     if (events.length === 0) return '(no family events saved)';
@@ -226,7 +210,8 @@ async function fetchLiveEvents(): Promise<string> {
       .join('\n');
 
     return upcoming || '(no upcoming family events)';
-  } catch {
+  } catch (err) {
+    console.warn('[chat] Could not load calendar events:', err);
     return '(could not load calendar events)';
   }
 }

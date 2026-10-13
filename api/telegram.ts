@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Groq from 'groq-sdk';
+import { readState, updateState, isCloudSyncConfigured } from '../lib/state';
+import { broadcastState } from '../lib/broadcast';
+import type { CalendarEvent, AppSyncState } from '../src/types';
 
 // ---------------------------------------------------------------------------
 // Inline schedule logic — mirrored from src/data/schedule.ts
@@ -173,20 +176,303 @@ function extractDate(message: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Date Range & Event Extraction Helpers
+// ---------------------------------------------------------------------------
+
+function extractDateRange(message: string): { start: string; end: string } | null {
+  const mNames: Record<string, number> = {
+    jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
+    apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7,
+    aug: 8, august: 8, sep: 9, september: 9, oct: 10, october: 10,
+    nov: 11, november: 11, dec: 12, december: 12,
+  };
+
+  // e.g. "from 20 to 22 June 2026", "20 to 22 June", "20 - 22 June 2026"
+  const engRange = message.match(/(?:from\s+)?(\d{1,2})(?:st|nd|rd|th)?\s*(?:to|–|-)\s*(\d{1,2})(?:st|nd|rd|th)?\s+([a-zA-Z]+)(?:\s+(\d{4}))?/i);
+  if (engRange) {
+    const d1 = parseInt(engRange[1]);
+    const d2 = parseInt(engRange[2]);
+    const m = mNames[engRange[3].toLowerCase()];
+    const y = engRange[4] ? parseInt(engRange[4]) : 2026;
+    if (m) {
+      return {
+        start: `${y}-${String(m).padStart(2, '0')}-${String(d1).padStart(2, '0')}`,
+        end: `${y}-${String(m).padStart(2, '0')}-${String(d2).padStart(2, '0')}`,
+      };
+    }
+  }
+
+  // e.g. "2026-06-20 to 2026-06-22"
+  const isoRange = message.match(/(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})\s*(?:to|–|-|至|到)\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})/);
+  if (isoRange) {
+    const formatIso = (s: string) => {
+      const parts = s.split(/[-/.]/);
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    };
+    return {
+      start: formatIso(isoRange[1]),
+      end: formatIso(isoRange[2]),
+    };
+  }
+
+  // e.g. "6月20日到22日" or "6月20日到6月22日"
+  const zhRange = message.match(/(?:(\d{4})年\s*)?(\d{1,2})月\s*(\d{1,2})[日号]?\s*(?:到|至|–|-)\s*(?:(\d{1,2})月\s*)?(\d{1,2})[日号]?/);
+  if (zhRange) {
+    const y = zhRange[1] ? parseInt(zhRange[1]) : 2026;
+    const m1 = zhRange[2].padStart(2, '0');
+    const d1 = zhRange[3].padStart(2, '0');
+    const m2 = (zhRange[4] ?? zhRange[2]).padStart(2, '0');
+    const d2 = zhRange[5].padStart(2, '0');
+    return {
+      start: `${y}-${m1}-${d1}`,
+      end: `${y}-${m2}-${d2}`,
+    };
+  }
+
+  return null;
+}
+
+function inferCategory(text: string): CalendarEvent['category'] {
+  const low = text.toLowerCase();
+  if (
+    low.includes('staycation') || low.includes('holiday') || low.includes('trip') ||
+    low.includes('vacation') || low.includes('sentosa') || low.includes('resort') ||
+    low.includes('hotel') || low.includes('旅行') || low.includes('假期') || low.includes('度假')
+  ) {
+    return 'holiday_plan';
+  }
+  if (
+    low.includes('dinner') || low.includes('lunch') || low.includes('gathering') ||
+    low.includes('meal') || low.includes('reunion') || low.includes('makan') ||
+    low.includes('聚餐') || low.includes('吃饭') || low.includes('聚会')
+  ) {
+    return 'family_gathering';
+  }
+  if (
+    low.includes('doctor') || low.includes('medical') || low.includes('clinic') ||
+    low.includes('hospital') || low.includes('checkup') || low.includes('appointment') ||
+    low.includes('polyclinic') || low.includes('医生') || low.includes('看病') ||
+    low.includes('检查') || low.includes('诊所')
+  ) {
+    return 'medical';
+  }
+  if (low.includes('leave') || low.includes('mc') || low.includes('off') || low.includes('请假') || low.includes('休假')) {
+    return 'leave';
+  }
+  return 'general';
+}
+
+function extractLocation(text: string): string | undefined {
+  const locMatch =
+    text.match(/\bat\s+([A-Za-z0-9'\s]+?)(?=\s+(?:from|on|at\s+\d|\d{1,2}|2026|$|[,.]))/i) ||
+    text.match(/@\s*([A-Za-z0-9\u4e00-\u9fa5\s]+)/) ||
+    text.match(/在\s*([^,.\s]+(?:家|诊所|医院|酒店|度假村|中心|餐馆|饭店)?)/);
+  if (locMatch && locMatch[1]) {
+    const loc = locMatch[1].trim();
+    if (loc && !/^\d+$/.test(loc) && !/^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(loc)) {
+      return loc;
+    }
+  }
+  return undefined;
+}
+
+function extractTime(text: string): string | undefined {
+  const timeMatch = text.match(/\b([012]?\d:[0-5]\d)\b/) || text.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM))\b/);
+  if (timeMatch) return timeMatch[1].trim();
+  const zhTime = text.match(/(早上|上午|中午|下午|晚上|夜间)?\s*(\d{1,2})点(?:(\d{1,2})分|半)?/);
+  if (zhTime) return zhTime[0].trim();
+  return undefined;
+}
+
+function extractCleanTitle(message: string, isZh: boolean): string {
+  let cleaned = message
+    .replace(/^\/add\s*/i, '')
+    .replace(/^(?:please\s+)?(?:add|create|schedule|plan|put|book)\s+(?:a\s+)?/i, '')
+    .replace(/^(?:请|帮我)?(?:添加|加入|安排|记一下|记录)\s*/, '')
+    .replace(/(?:from\s+)?\d{1,2}(?:st|nd|rd|th)?\s*(?:to|–|-)\s*\d{1,2}(?:st|nd|rd|th)?\s+[a-zA-Z]+(?:\s+\d{4})?/gi, '')
+    .replace(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s*(?:to|–|-|至|到)\s*\d{4}[-/.]\d{1,2}[-/.]\d{1,2})?/g, '')
+    .replace(/(?:\d{4}年\s*)?\d{1,2}月\s*\d{1,2}[日号]?(?:\s*(?:到|至|–|-)\s*(?:\d{1,2}月\s*)?\d{1,2}[日号]?)?/g, '')
+    .replace(/\bon\s+\w+\s+\d{1,2}(?:\s+\d{4})?/gi, '')
+    .replace(/\bon\s+\d{1,2}(?:st|nd|rd|th)?\s+\w+(?:\s+\d{4})?/gi, '')
+    .replace(/\bnext\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|week)\b/gi, '')
+    .replace(/(?:早上|上午|中午|下午|晚上|夜间)?\s*\d{1,2}点(?:\d{1,2}分|半)?/g, '')
+    .replace(/\bat\s+[012]?\d(?::[0-5]\d)?\s*(?:am|pm)?/gi, '')
+    .replace(/\bat\s+[012]?\d:[0-5]\d/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned || cleaned.length < 2) {
+    return isZh ? '家庭活动' : 'Family Event';
+  }
+  return cleaned;
+}
+
+async function saveCalendarEvent(eventData: {
+  title: string;
+  startDate: string;
+  endDate?: string;
+  category?: CalendarEvent['category'];
+  memberId?: string;
+  time?: string;
+  location?: string;
+  notes?: string;
+}): Promise<{ event: CalendarEvent; cloudSync: boolean }> {
+  const now = new Date().toISOString();
+  const payload: CalendarEvent = {
+    id: `ev-tg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    title: eventData.title,
+    startDate: eventData.startDate,
+    endDate: eventData.endDate || undefined,
+    category: eventData.category || 'general',
+    memberId: eventData.memberId || 'all',
+    time: eventData.time || undefined,
+    location: eventData.location || undefined,
+    notes: eventData.notes || undefined,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    const newState = await updateState((draft) => {
+      draft.events.push(payload);
+    });
+    await broadcastState(newState);
+  } catch (err) {
+    console.warn('[telegram] Error saving event via updateState:', err);
+  }
+
+  return {
+    event: payload,
+    cloudSync: isCloudSyncConfigured(),
+  };
+}
+
+function formatCalendarContext(calendarState: AppSyncState): string {
+  let eventContext = '';
+  const events = calendarState.events ?? [];
+  const overrides = calendarState.overrides ?? [];
+  const members = calendarState.familyMembers ?? [];
+
+  const memberName = (id: string) => {
+    const m = members.find((fm) => fm.id === id);
+    return m ? m.name : id;
+  };
+
+  if (events.length > 0) {
+    const lines = events
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+      .map((e) => {
+        const dateRange = e.endDate && e.endDate !== e.startDate
+          ? `${e.startDate} to ${e.endDate}` : e.startDate;
+        const timePart = e.time ? ` at ${e.time}` : '';
+        const locPart = e.location ? ` @ ${e.location}` : '';
+        const notesPart = e.notes ? ` (${e.notes})` : '';
+        return `- [${e.category}] ${e.title} | ${dateRange}${timePart}${locPart} | Who: ${memberName(e.memberId)}${notesPart}`;
+      })
+      .join('\n');
+    eventContext += `\nCurrent calendar events:\n${lines}`;
+  }
+
+  if (overrides.length > 0) {
+    const oLines = overrides
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((o) => {
+        if (o.type === 'grandma_location')
+          return `- ${o.date}: Ahma override → ${o.grandmaLocation}${o.grandmaReason ? ` (${o.grandmaReason})` : ''}`;
+        if (o.type === 'junjie_shift')
+          return `- ${o.date}: Jun Jie override → ${o.shiftName || o.shiftCode}${o.shiftTime ? ` ${o.shiftTime}` : ''}${o.shiftReason ? ` (${o.shiftReason})` : ''}`;
+        return `- ${o.date}: ${o.type} override`;
+      })
+      .join('\n');
+    eventContext += `\n\nSpecial schedule overrides:\n${oLines}`;
+  }
+
+  return eventContext;
+}
+
+// ---------------------------------------------------------------------------
 // Core chat resolver (self-contained, no src/ imports)
 // ---------------------------------------------------------------------------
 
-function resolveAnswer(message: string, isZh: boolean): string {
+async function resolveAnswer(
+  message: string,
+  isZh: boolean,
+  calendarState?: AppSyncState
+): Promise<string> {
   const q = message.toLowerCase();
 
-  // --- Add event fallback (Gemini unavailable) ---
-  const addKeywords = ['add', 'create', 'schedule', 'plan', 'book', 'put', '记', '添加', '加入', '安排', '计划'];
-  const eventKeywords = ['event', 'trip', 'holiday', 'plan', 'gathering', 'appointment', 'staycation', '活动', '旅行', '假期', '聚餐', '行程'];
-  const wantsAdd = addKeywords.some((k) => q.includes(k)) && eventKeywords.some((k) => q.includes(k));
+  // --- Add event handling (serverless direct storage, no external server required) ---
+  const addKeywords = ['add', 'create', 'schedule', 'plan', 'book', 'put', '记', '添加', '加入', '安排', '计划', '/add'];
+  const eventKeywords = ['event', 'trip', 'holiday', 'plan', 'gathering', 'appointment', 'staycation', 'dinner', 'lunch', '活动', '旅行', '假期', '聚餐', '行程', '聚会', '门诊', '看病', '复诊'];
+  const wantsAdd = (addKeywords.some((k) => q.includes(k)) && (eventKeywords.some((k) => q.includes(k)) || q.startsWith('/add'))) || q.startsWith('/add');
+
   if (wantsAdd) {
+    const range = extractDateRange(message);
+    const singleDate = extractDate(message);
+    const startDate = range?.start || singleDate;
+    const endDate = range?.end;
+
+    if (startDate) {
+      const cleanTitle = extractCleanTitle(message, isZh);
+      const cat = inferCategory(message);
+      const loc = extractLocation(message);
+      const tm = extractTime(message);
+
+      const { event: ev, cloudSync } = await saveCalendarEvent({
+        title: cleanTitle,
+        startDate,
+        endDate,
+        category: cat,
+        location: loc,
+        time: tm,
+      });
+
+      const dateRange = ev.endDate ? `${ev.startDate} – ${ev.endDate}` : ev.startDate;
+      const locPart = ev.location ? ` @ ${ev.location}` : '';
+      const syncNote = cloudSync
+        ? (isZh ? '☁️ 已实时同步至家庭日历。' : '☁️ Live-synced to family calendar.')
+        : (isZh ? '⚠️ 提示：Vercel 尚未配置 GITHUB_TOKEN，此活动仅临时保存在本地。配置 GITHUB_TOKEN 后即可全家自动同步。' : '⚠️ Note: GITHUB_TOKEN is not configured in Vercel. Add GITHUB_TOKEN in your Vercel project settings to sync across all family devices.');
+
+      return isZh
+        ? `好的！我已把活动添加到日历：\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}\n\n${syncNote}\n您可以在日历网页上查看！`
+        : `Done! I've added this to the calendar:\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}\n\n${syncNote}\nYou can check it on the calendar web app!`;
+    }
+
     return isZh
-      ? `要添加活动，请提供：\n• 活动名称\n• 日期（例如：2026年6月20日）\n• 地点（可选）\n• 备注（可选）\n\n目前我需要网络连接才能保存活动。请稍后再试，或直接在日历网页上添加。`
-      : `To add an event, I need a connection to the calendar server.\nPlease try again shortly, or add it directly on the calendar web app.\n\nYou can also try: "Add a family staycation at Sentosa from 20 to 22 June 2026"`;
+      ? `要添加活动，请提供活动名称和日期（例如：“6月20日晚上7点在爸爸家聚餐” 或 “添加 2026-06-20 聚餐”）。我会直接为您记录到家庭日历中！`
+      : `To add an event, please tell me the event name and date (e.g. "Add a family staycation at Sentosa from 20 to 22 June 2026" or "Add dinner on 20 June 2026 at 7pm"). I will save it directly to the calendar!`;
+  }
+
+  const dateStr = extractDate(message);
+
+  // --- Check calendar events in fallback mode ---
+  const asksEvent =
+    q.includes('event') || q.includes('plan') || q.includes('schedule') || q.includes('trip') ||
+    q.includes('staycation') || q.includes('gathering') || q.includes('dinner') || q.includes('lunch') ||
+    q.includes('活动') || q.includes('安排') || q.includes('计划') || q.includes('聚餐') || q.includes('聚会');
+
+  if (asksEvent && calendarState?.events && calendarState.events.length > 0) {
+    const today = todaySGT();
+    const targetDate = dateStr || today;
+    const matching = dateStr
+      ? calendarState.events.filter((e) => (e.startDate <= targetDate && (e.endDate || e.startDate) >= targetDate) || e.startDate === targetDate)
+      : calendarState.events
+          .filter((e) => (e.endDate || e.startDate) >= today)
+          .sort((a, b) => a.startDate.localeCompare(b.startDate))
+          .slice(0, 5);
+
+    if (matching.length > 0) {
+      const list = matching.map((e) => {
+        const dRange = e.endDate && e.endDate !== e.startDate ? `${e.startDate} ~ ${e.endDate}` : e.startDate;
+        const loc = e.location ? ` @ ${e.location}` : '';
+        const time = e.time ? ` ${e.time}` : '';
+        return `• [${e.title}] ${dRange}${time}${loc}`;
+      }).join('\n');
+
+      return isZh
+        ? `📅 ${dateStr ? `${dateStr} 的` : '近期'}日历活动：\n${list}`
+        : `📅 ${dateStr ? `Events on ${dateStr}` : 'Upcoming family calendar events'}:\n${list}`;
+    }
   }
 
   const asksAhma =
@@ -204,8 +490,6 @@ function resolveAnswer(message: string, isZh: boolean): string {
     q.includes('holiday') || q.includes('假期') || q.includes('public holiday') ||
     q.includes('公假') || q.includes('national day') || q.includes('cny') ||
     q.includes('chinese new year') || q.includes('新年');
-
-  const dateStr = extractDate(message);
 
   // --- Ahma location ---
   if (asksAhma) {
@@ -301,8 +585,8 @@ function resolveAnswer(message: string, isZh: boolean): string {
 
   // --- Default ---
   return isZh
-    ? `你好！有什么我可以帮你的吗？😊\n\n我也很擅长回答：\n• 阿嬷在某天住在哪里（例如："2026年6月15日阿嬷在哪里？"）\n• 俊杰某天的班次（例如："6月15日俊杰上什么班？"）\n• 新加坡公共假期`
-    : `Hey there! What's on your mind? 😊\n\nI'm also great with:\n• Where Ahma is staying on any date (e.g. "Where is Ahma on 15 June 2026?")\n• Jun Jie's shift on any date (e.g. "What is Jun Jie's shift on 15 June?")\n• Singapore public holidays`;
+    ? `你好！有什么我可以帮你的吗？😊\n\n我也很擅长回答：\n• 阿嬷在某天住在哪里（例如："2026年6月15日阿嬷在哪里？"）\n• 俊杰某天的班次（例如："6月15日俊杰上什么班？"）\n• 新加坡公共假期\n• 添加家庭活动（例如："添加 6月20日 晚上7点 爸爸家聚餐"）`
+    : `Hey there! What's on your mind? 😊\n\nI'm also great with:\n• Where Ahma is staying on any date (e.g. "Where is Ahma on 15 June 2026?")\n• Jun Jie's shift on any date (e.g. "What is Jun Jie's shift on 15 June?")\n• Singapore public holidays\n• Add calendar events (e.g. "Add dinner on 20 June 2026 at 7pm")`;
 }
 
 // ---------------------------------------------------------------------------
@@ -325,63 +609,18 @@ async function sendTelegramMessage(token: string, chatId: number, text: string) 
   }
 }
 
-async function getAiReply(message: string, language: 'en' | 'zh', apiKey: string): Promise<string> {
+async function getAiReply(
+  message: string,
+  language: 'en' | 'zh',
+  apiKey: string,
+  calendarState: AppSyncState
+): Promise<string> {
   const groq = new Groq({ apiKey });
-  const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '');
 
   // -------------------------------------------------------------------------
-  // Fetch live calendar state (events + overrides) for context
+  // Live calendar state context (events + overrides)
   // -------------------------------------------------------------------------
-  let eventContext = '';
-  let calendarState: any = null;
-
-  if (appUrl) {
-    try {
-      const stateRes = await fetch(`${appUrl}/api/state`);
-      if (stateRes.ok) {
-        calendarState = await stateRes.json();
-        const events: any[] = calendarState.events ?? [];
-        const overrides: any[] = calendarState.overrides ?? [];
-        const members: any[] = calendarState.familyMembers ?? [];
-
-        const memberName = (id: string) => {
-          const m = members.find((fm: any) => fm.id === id);
-          return m ? m.name : id;
-        };
-
-        if (events.length > 0) {
-          const lines = events
-            .sort((a: any, b: any) => a.startDate.localeCompare(b.startDate))
-            .map((e: any) => {
-              const dateRange = e.endDate && e.endDate !== e.startDate
-                ? `${e.startDate} to ${e.endDate}` : e.startDate;
-              const timePart = e.time ? ` at ${e.time}` : '';
-              const locPart = e.location ? ` @ ${e.location}` : '';
-              const notesPart = e.notes ? ` (${e.notes})` : '';
-              return `- [${e.category}] ${e.title} | ${dateRange}${timePart}${locPart} | Who: ${memberName(e.memberId)}${notesPart}`;
-            })
-            .join('\n');
-          eventContext += `\nCurrent calendar events:\n${lines}`;
-        }
-
-        if (overrides.length > 0) {
-          const oLines = overrides
-            .sort((a: any, b: any) => a.date.localeCompare(b.date))
-            .map((o: any) => {
-              if (o.type === 'grandma_location')
-                return `- ${o.date}: Ahma override → ${o.grandmaLocation}${o.grandmaReason ? ` (${o.grandmaReason})` : ''}`;
-              if (o.type === 'junjie_shift')
-                return `- ${o.date}: Jun Jie override → ${o.shiftName || o.shiftCode}${o.shiftTime ? ` ${o.shiftTime}` : ''}${o.shiftReason ? ` (${o.shiftReason})` : ''}`;
-              return `- ${o.date}: ${o.type} override`;
-            })
-            .join('\n');
-          eventContext += `\n\nSpecial schedule overrides:\n${oLines}`;
-        }
-      }
-    } catch (err) {
-      console.warn('Could not fetch calendar state:', err);
-    }
-  }
+  const eventContext = formatCalendarContext(calendarState);
 
   // -------------------------------------------------------------------------
   // Step 1: Intent detection — classify + extract event fields as JSON
@@ -439,47 +678,29 @@ Message: "${message}"`;
   }
 
   // -------------------------------------------------------------------------
-  // Step 2: If adding an event, POST to /api/events and confirm
+  // Step 2: If adding an event, persist directly via updateState and confirm
   // -------------------------------------------------------------------------
   if (intent === 'add_event' && extractedEvent?.title && extractedEvent?.startDate) {
-    let savedEvent: any = null;
+    const { event: ev, cloudSync } = await saveCalendarEvent({
+      title: extractedEvent.title,
+      startDate: extractedEvent.startDate,
+      endDate: extractedEvent.endDate || undefined,
+      category: extractedEvent.category || 'holiday_plan',
+      memberId: extractedEvent.memberId || 'all',
+      time: extractedEvent.time || undefined,
+      location: extractedEvent.location || undefined,
+      notes: extractedEvent.notes || undefined,
+    });
 
-    if (appUrl) {
-      try {
-        const now = new Date().toISOString();
-        const payload = {
-          id: `ev-tg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          title: extractedEvent.title,
-          startDate: extractedEvent.startDate,
-          endDate: extractedEvent.endDate || undefined,
-          category: extractedEvent.category || 'holiday_plan',
-          memberId: extractedEvent.memberId || 'all',
-          time: extractedEvent.time || undefined,
-          location: extractedEvent.location || undefined,
-          notes: extractedEvent.notes || undefined,
-          createdAt: now,
-          updatedAt: now,
-        };
-        const saveRes = await fetch(`${appUrl}/api/events`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (saveRes.ok) {
-          const saved = await saveRes.json();
-          savedEvent = saved.event ?? payload;
-        }
-      } catch (err) {
-        console.warn('Could not save event via API:', err);
-      }
-    }
-
-    const ev = savedEvent ?? extractedEvent;
     const dateRange = ev.endDate ? `${ev.startDate} – ${ev.endDate}` : ev.startDate;
     const locPart = ev.location ? ` @ ${ev.location}` : '';
+    const syncNote = cloudSync
+      ? (language === 'zh' ? '☁️ 已实时同步至家庭日历。' : '☁️ Live-synced to family calendar.')
+      : (language === 'zh' ? '⚠️ 提示：Vercel 尚未配置 GITHUB_TOKEN，此活动仅临时保存在本地。配置 GITHUB_TOKEN 后即可全家自动同步。' : '⚠️ Note: GITHUB_TOKEN is not configured in Vercel. Add GITHUB_TOKEN in your Vercel project settings to sync across all family devices.');
+
     return language === 'zh'
-      ? `好的！我已把以下活动添加到日历：\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}${ev.notes ? `\n📝 ${ev.notes}` : ''}\n\n您可以在日历网页上查看！`
-      : `Done! I've added this to the calendar:\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}${ev.notes ? `\n📝 ${ev.notes}` : ''}\n\nYou can check it on the calendar web app!`;
+      ? `好的！我已把以下活动添加到日历：\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}${ev.notes ? `\n📝 ${ev.notes}` : ''}\n\n${syncNote}\n您可以在日历网页上查看！`
+      : `Done! I've added this to the calendar:\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}${ev.notes ? `\n📝 ${ev.notes}` : ''}\n\n${syncNote}\nYou can check it on the calendar web app!`;
   }
 
   // -------------------------------------------------------------------------
@@ -563,22 +784,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (userText === '/start') {
     replyText =
       language === 'zh'
-        ? '您好！我是阿嬷日程小助手 🌸\n\n您可以问我：\n• 某一天阿嬷住在谁家（启超、启源、启文）\n• 俊杰的上下班班次\n• 日历上的活动和假期计划\n• 新加坡公共假期\n• 或者聊任何话题！\n\n例如：「2026年6月15日阿嬷住在哪里？」'
-        : "Hello! I'm Ahma Bot 🌸\n\nYou can ask me:\n• Where Ahma is staying on any date\n• Jun Jie's work shift on any date\n• Events and holiday plans on the calendar\n• Singapore public holidays\n• Or just have a chat!\n\nExample: \"Where is Ahma on 15 June 2026?\"";
+        ? '您好！我是阿嬷日程小助手 🌸\n\n您可以问我：\n• 某一天阿嬷住在谁家（启超、启源、启文）\n• 俊杰的上下班班次\n• 日历上的活动和假期计划\n• 新加坡公共假期\n• 添加活动（例如：“添加 6月20日 晚上7点 爸爸家聚餐” 或 “/add 2026-06-20 聚餐”）\n• 或者聊任何话题！\n\n例如：「2026年6月15日阿嬷住在哪里？」'
+        : "Hello! I'm Ahma Bot 🌸\n\nYou can ask me:\n• Where Ahma is staying on any date\n• Jun Jie's work shift on any date\n• Events and holiday plans on the calendar\n• Singapore public holidays\n• Add calendar events (e.g. \"Add dinner on 20 June 2026 at 7pm\" or \"/add 2026-06-20 Family gathering\")\n• Or just have a chat!\n\nExample: \"Where is Ahma on 15 June 2026?\"";
   } else {
-    // Try Groq AI first
+    // 1. Fetch live calendar state directly in serverless runtime (no external HTTP required)
+    let calendarState: AppSyncState;
+    try {
+      calendarState = await readState();
+    } catch {
+      calendarState = {
+        events: [],
+        overrides: [],
+        familyMembers: [],
+        settings: {
+          grandmaAnchorDate: '2026-05-07',
+          grandmaCycleDays: 14,
+          grandmaSequence: ['KC', 'KG', 'KB'],
+          grandmaLocations: {
+            KC: { name: 'Kay Cheow', notes: 'Kay Cheow (KC)' },
+            KG: { name: 'Kay Guan', notes: 'Kay Guan (KG)' },
+            KB: { name: 'Kay Boon', notes: 'Kay Boon (KB)' },
+          },
+          junjieAnchorDate: '2026-06-15',
+          junjieCycleWeeks: 3,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+    }
+
+    // 2. Try Groq AI first if API key is provided
     const groqKey = process.env.GROQ_API_KEY ?? '';
     if (groqKey) {
       try {
-        replyText = await getAiReply(userText, language, groqKey);
+        replyText = await getAiReply(userText, language, groqKey, calendarState);
       } catch (err: any) {
         console.warn('Groq failed, using local solver:', err?.message ?? err);
       }
     }
 
-    // Fall back to inline rule-based solver
+    // 3. Fall back to direct local solver
     if (!replyText) {
-      replyText = resolveAnswer(userText, language === 'zh');
+      replyText = await resolveAnswer(userText, language === 'zh', calendarState);
     }
   }
 
