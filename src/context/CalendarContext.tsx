@@ -186,22 +186,22 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const isSyncing = React.useRef(false);
+
   useEffect(() => {
     // Initial fetch on mount
     fetchState();
 
     // Re-fetch immediately when user switches to this tab / unlocks device
-    const handleFocus = () => {
-      fetchState();
-    };
+    const handleFocus = () => { if (!isSyncing.current) fetchState(); };
     window.addEventListener('focus', handleFocus);
     window.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') fetchState();
+      if (document.visibilityState === 'visible' && !isSyncing.current) fetchState();
     });
 
     // Poll every 6 seconds so changes made on other devices appear quickly
     const POLL_INTERVAL = 6_000;
-    const timer = setInterval(fetchState, POLL_INTERVAL);
+    const timer = setInterval(() => { if (!isSyncing.current) fetchState(); }, POLL_INTERVAL);
 
     return () => {
       clearInterval(timer);
@@ -242,6 +242,7 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     setLastSyncTime(new Date());
 
     try {
+      isSyncing.current = true;
       const res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -253,14 +254,18 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
           setSyncStatus('disconnected');
         } else {
           setSyncStatus('connected');
+          // Re-fetch from server to confirm GitHub write succeeded
+          setTimeout(() => fetchState(), 1500);
         }
       } else {
         setSyncStatus('disconnected');
       }
     } catch {
       setSyncStatus('disconnected');
+    } finally {
+      isSyncing.current = false;
     }
-  }, []);
+  }, [fetchState]);
 
   const deleteEvent = useCallback(async (id: string) => {
     setEvents((prev) => prev.filter((e) => e.id !== id));

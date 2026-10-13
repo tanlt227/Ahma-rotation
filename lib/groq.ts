@@ -1,8 +1,8 @@
 import Groq from 'groq-sdk';
 
 export const GROQ_CANDIDATE_MODELS = [
-  'qwen/qwen3.8-27b',
   'openai/gpt-oss-20b',
+  'qwen/qwen3.8-27b',
   'llama-3.1-8b-instant',
   'llama3-8b-8192',
 ];
