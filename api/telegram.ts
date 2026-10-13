@@ -616,96 +616,70 @@ async function getAiReply(
   calendarState: AppSyncState
 ): Promise<string> {
   const groq = new Groq({ apiKey });
+  const q = message.toLowerCase();
 
-  // -------------------------------------------------------------------------
-  // Live calendar state context (events + overrides)
-  // -------------------------------------------------------------------------
-  const eventContext = formatCalendarContext(calendarState);
+  // If the user clearly wants to add an event, extract details and save
+  const addKeywords = ['add', 'create', 'schedule', 'plan', 'book', 'put', '记', '添加', '加入', '安排', '计划', '/add'];
+  const eventKeywords = ['event', 'trip', 'holiday', 'plan', 'gathering', 'appointment', 'staycation', 'dinner', 'lunch', '活动', '旅行', '假期', '聚餐', '行程', '聚会', '门诊', '看病', '复诊'];
+  const wantsAdd = (addKeywords.some((k) => q.includes(k)) && (eventKeywords.some((k) => q.includes(k)) || q.startsWith('/add'))) || q.startsWith('/add');
 
-  // -------------------------------------------------------------------------
-  // Step 1: Intent detection — classify + extract event fields as JSON
-  // -------------------------------------------------------------------------
-  const intentPrompt = `You are a smart assistant that classifies a user message for a family calendar app.
-
-Classify the message and extract relevant fields. Respond ONLY with valid JSON matching this schema:
-{
-  "intent": "add_event" | "query" | "chat",
-  "event": {
-    "title": string,
-    "startDate": "YYYY-MM-DD",
-    "endDate": "YYYY-MM-DD or null",
-    "category": "holiday_plan" | "family_gathering" | "medical" | "leave" | "unusual_arrangement" | "general",
-    "memberId": "all" | "grandma" | "junjie" | "layting" | "dad" | "mom",
-    "time": "HH:MM or null",
-    "location": "string or null",
-    "notes": "string or null"
-  }
-}
-
-Rules:
-- Use "add_event" ONLY when the user clearly wants to ADD or SCHEDULE a NEW event.
-- Use "query" for questions about schedules, Ahma, shifts, holidays, or existing events.
-- Use "chat" for general conversation.
-- The "event" field is only required when intent is "add_event". Omit it otherwise.
-- Assume year 2026 if no year is specified.
-- memberId: "all" for whole family; "junjie" for Jun Jie/俊杰; "grandma" for Ahma/阿嬷; "layting" for Lay Ting/丽婷; default "all".
-- category: trips/holidays/staycations → "holiday_plan"; family meals/gatherings → "family_gathering"; doctor/checkup → "medical"; leave/MC → "leave"; else → "general".
-
+  if (wantsAdd) {
+    const intentPrompt = `You are an assistant for a family calendar app.
+Extract event details from this message: "${message}".
 Today is ${todaySGT()}.
-Message: "${message}"`;
+Respond ONLY with JSON:
+{
+  "title": string,
+  "startDate": "YYYY-MM-DD",
+  "endDate": "YYYY-MM-DD or null",
+  "category": "holiday_plan" | "family_gathering" | "medical" | "leave" | "general",
+  "memberId": "all" | "grandma" | "junjie" | "layting" | "dad" | "mom",
+  "time": "HH:MM or null",
+  "location": "string or null",
+  "notes": "string or null"
+}`;
 
-  let intent = 'query';
-  let extractedEvent: any = null;
+    try {
+      const intentCompletion = await groq.chat.completions.create({
+        model: 'llama-3.1-8b-instant',
+        messages: [{ role: 'user', content: intentPrompt }],
+        temperature: 0.1,
+        max_tokens: 256,
+      });
+      const raw = intentCompletion.choices[0]?.message?.content?.trim() ?? '';
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const extractedEvent = JSON.parse(jsonMatch[0]);
+        if (extractedEvent?.title && extractedEvent?.startDate) {
+          const { event: ev, cloudSync } = await saveCalendarEvent({
+            title: extractedEvent.title,
+            startDate: extractedEvent.startDate,
+            endDate: extractedEvent.endDate || undefined,
+            category: extractedEvent.category || 'general',
+            memberId: extractedEvent.memberId || 'all',
+            time: extractedEvent.time || undefined,
+            location: extractedEvent.location || undefined,
+            notes: extractedEvent.notes || undefined,
+          });
 
-  try {
-    const intentCompletion = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
-      messages: [{ role: 'user', content: intentPrompt }],
-      temperature: 0.1,
-      max_tokens: 256,
-      // @ts-ignore
-      reasoning_effort: 'none',
-    });
-    const raw = intentCompletion.choices[0]?.message?.content?.trim() ?? '';
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      intent = parsed.intent ?? 'query';
-      extractedEvent = parsed.event ?? null;
+          const dateRange = ev.endDate ? `${ev.startDate} – ${ev.endDate}` : ev.startDate;
+          const locPart = ev.location ? ` @ ${ev.location}` : '';
+          const syncNote = cloudSync
+            ? (language === 'zh' ? '☁️ 已实时同步至家庭日历。' : '☁️ Live-synced to family calendar.')
+            : (language === 'zh' ? '⚠️ 提示：Vercel 尚未配置 GITHUB_TOKEN，此活动仅保存在本地。配置 GITHUB_TOKEN 后即可全家自动同步。' : '⚠️ Note: GITHUB_TOKEN is not configured in Vercel. Add GITHUB_TOKEN in your Vercel project settings to sync across all devices.');
+
+          return language === 'zh'
+            ? `好的！我已把活动添加到日历：\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}\n\n${syncNote}\n您可以在日历网页上查看！`
+            : `Done! I've added this to the calendar:\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}\n\n${syncNote}\nYou can check it on the calendar web app!`;
+        }
+      }
+    } catch (err) {
+      console.warn('[telegram] AI event extraction failed, falling back to regex parser:', err);
     }
-  } catch (err) {
-    console.warn('Intent detection failed, defaulting to query:', err);
   }
 
-  // -------------------------------------------------------------------------
-  // Step 2: If adding an event, persist directly via updateState and confirm
-  // -------------------------------------------------------------------------
-  if (intent === 'add_event' && extractedEvent?.title && extractedEvent?.startDate) {
-    const { event: ev, cloudSync } = await saveCalendarEvent({
-      title: extractedEvent.title,
-      startDate: extractedEvent.startDate,
-      endDate: extractedEvent.endDate || undefined,
-      category: extractedEvent.category || 'holiday_plan',
-      memberId: extractedEvent.memberId || 'all',
-      time: extractedEvent.time || undefined,
-      location: extractedEvent.location || undefined,
-      notes: extractedEvent.notes || undefined,
-    });
-
-    const dateRange = ev.endDate ? `${ev.startDate} – ${ev.endDate}` : ev.startDate;
-    const locPart = ev.location ? ` @ ${ev.location}` : '';
-    const syncNote = cloudSync
-      ? (language === 'zh' ? '☁️ 已实时同步至家庭日历。' : '☁️ Live-synced to family calendar.')
-      : (language === 'zh' ? '⚠️ 提示：Vercel 尚未配置 GITHUB_TOKEN，此活动仅临时保存在本地。配置 GITHUB_TOKEN 后即可全家自动同步。' : '⚠️ Note: GITHUB_TOKEN is not configured in Vercel. Add GITHUB_TOKEN in your Vercel project settings to sync across all family devices.');
-
-    return language === 'zh'
-      ? `好的！我已把以下活动添加到日历：\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}${ev.notes ? `\n📝 ${ev.notes}` : ''}\n\n${syncNote}\n您可以在日历网页上查看！`
-      : `Done! I've added this to the calendar:\n\n📅 ${ev.title}\n🗓 ${dateRange}${locPart}${ev.time ? `\n⏰ ${ev.time}` : ''}${ev.notes ? `\n📝 ${ev.notes}` : ''}\n\n${syncNote}\nYou can check it on the calendar web app!`;
-  }
-
-  // -------------------------------------------------------------------------
-  // Step 3: Normal conversational reply with full calendar context
-  // -------------------------------------------------------------------------
+  // Live calendar state context (events + overrides)
+  const eventContext = formatCalendarContext(calendarState);
   const today = todaySGT();
   const ahmaNow = getAhmaLocation(today);
   const locNow = LOCATION_NAMES[ahmaNow.code] ?? { en: ahmaNow.code, zh: ahmaNow.code };
@@ -717,7 +691,7 @@ Message: "${message}"`;
 
   const systemPrompt = `TODAY IS ${today} (Singapore Time, SGT UTC+8). Use this as the current date for ALL answers.
 
-You are Ahma Bot 🌸, a warm and friendly family assistant for the "Ahma's Rotation" app. You love chatting with the family and can talk about anything — daily life, food, feelings, general questions, or just casual conversation. You are helpful, cheerful, and feel like a family member yourself.
+You are Ahma Bot 🌸, a warm and friendly family assistant for the "Ahma's Rotation" app. You love chatting with the family and can talk about anything — daily life, food, feelings, general questions, or casual conversation. You are helpful, cheerful, and feel like a family member.
 
 CRITICAL LIVE CALENDAR DATA (USE DIRECTLY — DO NOT CALCULATE OR COUNT CYCLES FROM MAY 2026):
 - Ahma is CURRENTLY at: ${locNow.en} (${ahmaNow.code}), Day ${ahmaNow.dayInStay}/${GRANDMA_DAYS_PER_LOCATION}, ${ahmaNow.daysLeft} days remaining. Moves to ${nextLocNow.en} on ${ahmaNow.nextDate}.
@@ -734,7 +708,7 @@ ANSWER RULES:
 - When asked "When is Ahma next at KG / 启源" → ANSWER DIRECTLY: ${nextKG.date} (in ${nextKG.daysAway} days).
 - When asked "When is Ahma next at KB / 启文" → ANSWER DIRECTLY: ${nextKB.date} (in ${nextKB.daysAway} days).
 - When asked "Where is Ahma today / now" → ANSWER DIRECTLY: ${locNow.en} (${ahmaNow.code}), Day ${ahmaNow.dayInStay} of 14, with ${ahmaNow.daysLeft} days remaining.
-- CRITICAL: DO NOT start by reciting the cycle history or counting cycles from 7 May 2026! Answer the user's question directly in the very first sentence.
+- CRITICAL: DO NOT start by reciting cycle history or counting cycles from 7 May 2026! Answer the user's question directly in the very first sentence.
 - When answering about events or plans, translate event titles and details into Chinese if the user is speaking Chinese, or keep in English otherwise.
 - For casual chat, just be natural and warm. For calendar questions, be accurate and concise.
 Answer in ${language === 'zh' ? 'Chinese (中文)' : 'English'}. Plain text only, no Markdown.`;
@@ -747,8 +721,6 @@ Answer in ${language === 'zh' ? 'Chinese (中文)' : 'English'}. Plain text only
     ],
     temperature: 0.7,
     max_tokens: 512,
-    // @ts-ignore
-    reasoning_effort: 'none',
   });
   return completion.choices[0]?.message?.content?.trim() ?? '';
 }
@@ -758,14 +730,38 @@ Answer in ${language === 'zh' ? 'Chinese (中文)' : 'English'}. Plain text only
 // ---------------------------------------------------------------------------
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(200).send('Ahma Rotation Telegram Webhook is active.');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
 
-  const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
+  const TELEGRAM_TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
+
+  // If accessed via GET in browser, provide live health & configuration check
+  if (req.method !== 'POST') {
+    const hasToken = Boolean(TELEGRAM_TOKEN);
+    const hasGroq = Boolean((process.env.GROQ_API_KEY ?? '').trim());
+    const hasGithub = isCloudSyncConfigured();
+    return res.status(200).json({
+      status: 'active',
+      service: 'Ahma Rotation Telegram Webhook',
+      time: new Date().toISOString(),
+      env: {
+        TELEGRAM_BOT_TOKEN: hasToken ? `set (ends ...${TELEGRAM_TOKEN.slice(-4)}) ✅` : 'MISSING ❌ — Add TELEGRAM_BOT_TOKEN to Vercel Environment Variables',
+        GROQ_API_KEY: hasGroq ? 'configured ✅' : 'MISSING ❌ — Add GROQ_API_KEY to Vercel Environment Variables',
+        GITHUB_TOKEN: hasGithub ? 'configured ✅ (multi-device cloud sync active)' : 'NOT SET ⚠️ (local memory only)',
+      },
+      webhookHelp: 'If bot is not responding on Telegram, make sure you set the webhook by opening in your browser: https://api.telegram.org/bot<YOUR_TOKEN>/setWebhook?url=https://<YOUR_APP_DOMAIN>/telegram/webhook',
+    });
+  }
+
+  // Handle Telegram POST Webhook update
   if (!TELEGRAM_TOKEN) {
-    console.error('TELEGRAM_BOT_TOKEN is not set.');
-    return res.status(500).json({ error: 'Bot token not configured.' });
+    console.error('[telegram] TELEGRAM_BOT_TOKEN is not set in Vercel environment variables.');
+    // Always return HTTP 200 so Telegram does not get stuck in a webhook retry storm
+    return res.status(200).json({ error: 'TELEGRAM_BOT_TOKEN is not set in Vercel environment variables.' });
   }
 
   const body = req.body;
@@ -781,54 +777,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let replyText = '';
 
-  if (userText === '/start') {
-    replyText =
-      language === 'zh'
-        ? '您好！我是阿嬷日程小助手 🌸\n\n您可以问我：\n• 某一天阿嬷住在谁家（启超、启源、启文）\n• 俊杰的上下班班次\n• 日历上的活动和假期计划\n• 新加坡公共假期\n• 添加活动（例如：“添加 6月20日 晚上7点 爸爸家聚餐” 或 “/add 2026-06-20 聚餐”）\n• 或者聊任何话题！\n\n例如：「2026年6月15日阿嬷住在哪里？」'
-        : "Hello! I'm Ahma Bot 🌸\n\nYou can ask me:\n• Where Ahma is staying on any date\n• Jun Jie's work shift on any date\n• Events and holiday plans on the calendar\n• Singapore public holidays\n• Add calendar events (e.g. \"Add dinner on 20 June 2026 at 7pm\" or \"/add 2026-06-20 Family gathering\")\n• Or just have a chat!\n\nExample: \"Where is Ahma on 15 June 2026?\"";
-  } else {
-    // 1. Fetch live calendar state directly in serverless runtime (no external HTTP required)
-    let calendarState: AppSyncState;
-    try {
-      calendarState = await readState();
-    } catch {
-      calendarState = {
-        events: [],
-        overrides: [],
-        familyMembers: [],
-        settings: {
-          grandmaAnchorDate: '2026-05-07',
-          grandmaCycleDays: 14,
-          grandmaSequence: ['KC', 'KG', 'KB'],
-          grandmaLocations: {
-            KC: { name: 'Kay Cheow', notes: 'Kay Cheow (KC)' },
-            KG: { name: 'Kay Guan', notes: 'Kay Guan (KG)' },
-            KB: { name: 'Kay Boon', notes: 'Kay Boon (KB)' },
-          },
-          junjieAnchorDate: '2026-06-15',
-          junjieCycleWeeks: 3,
-        },
-        lastUpdated: new Date().toISOString(),
-      };
-    }
-
-    // 2. Try Groq AI first if API key is provided
-    const groqKey = process.env.GROQ_API_KEY ?? '';
-    if (groqKey) {
+  try {
+    if (userText === '/start') {
+      replyText =
+        language === 'zh'
+          ? '您好！我是阿嬷日程小助手 🌸\n\n您可以问我：\n• 某一天阿嬷住在谁家（例如：“阿嬷几时来爸爸家？”）\n• 俊杰的上下班班次（例如：“6月15日俊杰上什么班？”）\n• 日历上的活动和假期计划\n• 新加坡公共假期\n• 添加活动（例如：“添加 6月20日 晚上7点 爸爸家聚餐” 或 “/add 2026-06-20 聚餐”）\n• 或者聊任何话题！\n\n例如：「2026年6月15日阿嬷住在哪里？」'
+          : "Hello! I'm Ahma Bot 🌸\n\nYou can ask me:\n• Where Ahma is staying on any date (e.g. \"When is Ahma coming over to KC house?\")\n• Jun Jie's work shift on any date\n• Events and holiday plans on the calendar\n• Singapore public holidays\n• Add calendar events (e.g. \"Add dinner on 20 June 2026 at 7pm\" or \"/add 2026-06-20 Family gathering\")\n• Or just have a chat!\n\nExample: \"Where is Ahma on 15 June 2026?\"";
+    } else {
+      let calendarState: AppSyncState;
       try {
-        replyText = await getAiReply(userText, language, groqKey, calendarState);
-      } catch (err: any) {
-        console.warn('Groq failed, using local solver:', err?.message ?? err);
+        calendarState = await readState();
+      } catch {
+        calendarState = structuredClone(DEFAULT_STATE);
+      }
+
+      const groqKey = (process.env.GROQ_API_KEY ?? '').trim();
+      if (groqKey) {
+        try {
+          replyText = await getAiReply(userText, language, groqKey, calendarState);
+        } catch (err: any) {
+          console.warn('[telegram] Groq failed, using local solver:', err?.message ?? err);
+        }
+      }
+
+      if (!replyText) {
+        replyText = await resolveAnswer(userText, language === 'zh', calendarState);
       }
     }
 
-    // 3. Fall back to direct local solver
     if (!replyText) {
-      replyText = await resolveAnswer(userText, language === 'zh', calendarState);
+      replyText = language === 'zh' ? '抱歉，我未能理解，请再试一次。' : 'Sorry, I could not process that. Please try again.';
     }
+
+    await sendTelegramMessage(TELEGRAM_TOKEN, chatId, replyText);
+  } catch (err) {
+    console.error('[telegram] Webhook handler error:', err);
+    try {
+      await sendTelegramMessage(
+        TELEGRAM_TOKEN,
+        chatId,
+        language === 'zh'
+          ? '抱歉，处理您的消息时出现异常，请稍后再试。'
+          : 'Sorry, an error occurred while processing your message. Please try again shortly.'
+      );
+    } catch {}
   }
 
-  // Send reply first, then ACK Vercel — ensures function isn't frozen mid-fetch
-  await sendTelegramMessage(TELEGRAM_TOKEN, chatId, replyText);
+  // Always return HTTP 200 to acknowledge receipt to Telegram
   return res.status(200).end();
 }

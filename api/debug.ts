@@ -2,17 +2,19 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Groq from 'groq-sdk';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const groqKey    = process.env.GROQ_API_KEY;
-  const githubToken = process.env.GITHUB_TOKEN;
-  const githubRepo  = process.env.GITHUB_REPO;
+  const groqKey       = process.env.GROQ_API_KEY;
+  const githubToken   = process.env.GITHUB_TOKEN;
+  const githubRepo    = process.env.GITHUB_REPO;
+  const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 
   const result: Record<string, unknown> = {
-    deployedCommit: '1f53669',
+    deployedCommit: '6acdf7c',
     todaySGT: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().split('T')[0],
     env: {
-      GROQ_API_KEY:  groqKey     ? `set (ends ...${groqKey.slice(-4)})`     : 'NOT SET ❌',
-      GITHUB_TOKEN:  githubToken ? `set (ends ...${githubToken.slice(-4)})` : 'NOT SET ❌',
-      GITHUB_REPO:   githubRepo  ?? 'NOT SET ❌',
+      TELEGRAM_BOT_TOKEN: telegramToken ? `set (ends ...${telegramToken.slice(-4)})` : 'NOT SET ❌',
+      GROQ_API_KEY:       groqKey       ? `set (ends ...${groqKey.slice(-4)})`       : 'NOT SET ❌',
+      GITHUB_TOKEN:       githubToken   ? `set (ends ...${githubToken.slice(-4)})`   : 'NOT SET ⚠️ (Local memory only)',
+      GITHUB_REPO:        githubRepo    ?? 'tanlt227/Ahma-rotation',
     },
     groq: null as unknown,
   };
