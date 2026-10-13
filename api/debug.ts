@@ -126,18 +126,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           method: 'POST',
           headers: { Authorization: `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
+            model: 'qwen/qwen3.8-27b',
             messages: [
-              { role: 'system', content: 'You are a helpful assistant.' },
+              { role: 'system', content: 'You are a helpful assistant. Answer concisely.' },
               { role: 'user', content: 'Tell me a very short joke in one sentence.' },
             ],
-            max_tokens: 128,
+            max_tokens: 1024,
             temperature: 0.7,
+            reasoning_effort: 'none',
           }),
         });
         const chatData = await chatRes.json();
-        if (chatRes.ok && chatData.choices?.[0]?.message?.content) {
-          result.chatTest = { status: 'success ✅', model: chatData.model, reply: chatData.choices[0].message.content.trim() };
+        if (chatRes.ok) {
+          const msg = chatData.choices?.[0]?.message;
+          const reply = msg?.content?.trim() || msg?.reasoning?.trim() || msg?.reasoning_content?.trim() || '';
+          if (reply) {
+            result.chatTest = { status: 'success ✅', model: chatData.model, reply };
+          } else {
+            result.chatTest = { status: 'empty response ❌', raw: JSON.stringify(msg) };
+          }
         } else {
           result.chatTest = { status: 'failed ❌', error: chatData.error?.message ?? JSON.stringify(chatData) };
         }

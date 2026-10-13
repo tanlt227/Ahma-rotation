@@ -1,10 +1,8 @@
 import Groq from 'groq-sdk';
 
 export const GROQ_CANDIDATE_MODELS = [
-  'llama-3.1-8b-instant',
-  'llama3-8b-8192',
-  'openai/gpt-oss-20b',
   'qwen/qwen3.8-27b',
+  'openai/gpt-oss-20b',
 ];
 
 export type GroqChatParams = Omit<Parameters<Groq['chat']['completions']['create']>[0], 'model'>;
@@ -21,14 +19,15 @@ export async function createGroqChat(
 
   for (const model of GROQ_CANDIDATE_MODELS) {
     try {
-      // Disable qwen reasoning mode to prevent empty content responses
-      const extraParams = model.includes('qwen') ? { reasoning_effort: 'none' } : {};
+      // Disable reasoning mode for models that support it
+      const extraParams = { reasoning_effort: 'none' };
       const completion = (await groq.chat.completions.create({
         ...params,
         ...extraParams,
         model,
       } as Parameters<Groq['chat']['completions']['create']>[0])) as Groq.Chat.ChatCompletion;
-      // Extract content — some models use reasoning/reasoning_content instead of content
+
+      // Extract content — try content first, then reasoning fields
       const msg = completion.choices[0]?.message as any;
       const content = msg?.content?.trim()
         || msg?.reasoning_content?.trim()

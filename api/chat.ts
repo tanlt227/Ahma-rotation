@@ -260,7 +260,7 @@ async function callGroq(groq: Groq, messages: Groq.Chat.ChatCompletionMessagePar
       const { completion } = await createGroqChat(groq, {
         messages,
         temperature: 0.7,
-        max_tokens: 512,
+        max_tokens: 1024,
       });
       const msg = completion.choices[0]?.message as any;
       const content = msg?.content?.trim()
