@@ -153,6 +153,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // --- Test /api/events write ---
+    const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '');
+    if (appUrl && githubToken) {
+      try {
+        const testEvent = {
+          id: `debug-test-${Date.now()}`,
+          title: 'Debug Test Event',
+          startDate: '2099-01-01',
+          category: 'general',
+          memberId: 'all',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        const evRes = await fetch(`${appUrl}/api/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(testEvent),
+        });
+        const evData = await evRes.json().catch(() => ({}));
+        if (evRes.ok) {
+          result.eventsTest = { status: 'success ✅', cloudSync: evData.cloudSync, eventId: testEvent.id };
+          // Clean up — delete the test event
+          await fetch(`${appUrl}/api/events?id=${testEvent.id}`, { method: 'DELETE' }).catch(() => {});
+        } else {
+          result.eventsTest = { status: `failed ❌ HTTP ${evRes.status}`, error: evData.error ?? JSON.stringify(evData) };
+        }
+      } catch (err: any) {
+        result.eventsTest = { status: 'error ❌', error: err?.message };
+      }
+    } else {
+      result.eventsTest = appUrl ? 'skipped — GITHUB_TOKEN not set' : 'skipped — APP_URL not set';
+    }
+
     return res.status(200).json(result);
   } catch (err: any) {
     return res.status(500).json({ error: 'Debug handler crashed', detail: err?.message ?? String(err) });
