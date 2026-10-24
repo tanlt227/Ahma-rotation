@@ -1,15 +1,5 @@
 {
-  "events": [
-    {
-      "id": "ev-tg-1792857939538-cyx7",
-      "title": "family plan on 26 oct 2026",
-      "startDate": "2026-10-26",
-      "category": "general",
-      "memberId": "all",
-      "createdAt": "2026-10-25T00:05:39.538Z",
-      "updatedAt": "2026-10-24T16:05:39.624Z"
-    }
-  ],
+  "events": [],
   "overrides": [],
   "familyMembers": [
     {
@@ -74,6 +64,6 @@
     "junjieAnchorDate": "2026-06-15",
     "junjieCycleWeeks": 3
   },
-  "lastUpdated": "2026-10-24T17:03:32.281Z",
-  "version": 17
+  "lastUpdated": "2026-10-24T17:03:51.979Z",
+  "version": 18
 }
