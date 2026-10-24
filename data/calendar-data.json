@@ -17,6 +17,15 @@
       "memberId": "all",
       "createdAt": "2026-10-25T00:22:30.835Z",
       "updatedAt": "2026-10-24T16:22:31.351Z"
+    },
+    {
+      "id": "ev-tg-1792861365051-uve5",
+      "title": "family staycation on 26 oct 202600:22",
+      "startDate": "2026-10-26",
+      "category": "holiday_plan",
+      "memberId": "all",
+      "createdAt": "2026-10-25T01:02:45.051Z",
+      "updatedAt": "2026-10-24T17:02:45.238Z"
     }
   ],
   "overrides": [],
@@ -83,6 +92,6 @@
     "junjieAnchorDate": "2026-06-15",
     "junjieCycleWeeks": 3
   },
-  "lastUpdated": "2026-10-24T16:22:31.351Z",
-  "version": 14
+  "lastUpdated": "2026-10-24T17:02:45.238Z",
+  "version": 15
 }
