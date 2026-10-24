@@ -11,13 +11,21 @@
  *                    (defaults to "data/calendar-data.json")
  */
 
-import fs from 'fs';
-import path from 'path';
 import type { AppSyncState } from '../src/types';
 
 // ─── config ──────────────────────────────────────────────────────────────────
 
-const LOCAL_DATA_PATH = path.resolve(process.cwd(), 'data/calendar-data.json');
+// LOCAL_DATA_PATH is only used when GITHUB_TOKEN is not set (local dev only)
+// Lazy-evaluated to avoid crashing on Vercel where process.cwd() may be read-only
+function getLocalDataPath(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const path = require('path');
+    return path.resolve(process.cwd(), 'data/calendar-data.json');
+  } catch {
+    return '/tmp/calendar-data.json';
+  }
+}
 
 export function isCloudSyncConfigured(): boolean {
   return Boolean(process.env.GITHUB_TOKEN);
@@ -207,8 +215,11 @@ let memoryCache: AppSyncState | null = null;
 
 function readFromLocalFile(): AppSyncState {
   try {
-    if (fs.existsSync(LOCAL_DATA_PATH)) {
-      const raw = fs.readFileSync(LOCAL_DATA_PATH, 'utf-8');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('fs');
+    const localPath = getLocalDataPath();
+    if (fs.existsSync(localPath)) {
+      const raw = fs.readFileSync(localPath, 'utf-8');
       const parsed = JSON.parse(raw);
       memoryCache = parsed;
       return parsed;
@@ -222,9 +233,14 @@ function readFromLocalFile(): AppSyncState {
 function writeToLocalFile(state: AppSyncState): void {
   memoryCache = structuredClone(state);
   try {
-    const dir = path.dirname(LOCAL_DATA_PATH);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const path = require('path');
+    const localPath = getLocalDataPath();
+    const dir = path.dirname(localPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(LOCAL_DATA_PATH, JSON.stringify(state, null, 2), 'utf-8');
+    fs.writeFileSync(localPath, JSON.stringify(state, null, 2), 'utf-8');
   } catch (err) {
     console.warn('[state] Could not write to local file (e.g. read-only serverless filesystem):', err);
   }
