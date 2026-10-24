@@ -283,7 +283,7 @@ function extractCleanTitle(message: string, isZh: boolean): string {
 // ---------------------------------------------------------------------------
 
 async function callGroqDirect(apiKey: string, systemPrompt: string, userMessage: string): Promise<string> {
-  const models = ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'llama-3.1-8b-instant'];
+  const models = ['qwen/qwen3.8-27b', 'openai/gpt-oss-20b'];
   for (const model of models) {
     try {
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -299,12 +299,21 @@ async function callGroqDirect(apiKey: string, systemPrompt: string, userMessage:
             { role: 'user', content: userMessage },
           ],
           temperature: 0.7,
-          max_tokens: 512,
+          max_tokens: 1024,
+          reasoning_effort: 'none',
         }),
       });
       if (res.ok) {
         const data = await res.json();
-        return data.choices?.[0]?.message?.content?.trim() || '';
+        const msg = data.choices?.[0]?.message;
+        // Extract content — qwen/gpt-oss may put answer in reasoning field
+        const content = msg?.content?.trim()
+          || msg?.reasoning?.trim()
+          || msg?.reasoning_content?.trim()
+          || '';
+        if (content) return content;
+        // Empty content — try next model
+        continue;
       }
     } catch {
       // try next model
@@ -494,9 +503,27 @@ function resolveAnswer(message: string, isZh: boolean): string {
       const name = SINGAPORE_PUBLIC_HOLIDAYS[dateStr];
       return isZh ? `${dateStr} 是新加坡公共假期：${name}。` : `${dateStr} is a Singapore Public Holiday: ${name}.`;
     }
+
+    // Check for specific year
+    const yearMatch = message.match(/\b(202\d|203\d)\b/);
+    const filterYear = yearMatch ? parseInt(yearMatch[1]) : null;
+
+    const SG_PH_BY_YEAR: Record<number, string[]> = {
+      2026: ["1 Jan: New Year's Day","17 Feb: CNY Day 1","18 Feb: CNY Day 2","20 Mar: Hari Raya Puasa","3 Apr: Good Friday","1 May: Labour Day","27 May: Hari Raya Haji","31 May: Vesak Day","1 Jun: Vesak Day In-Lieu","9 Aug: National Day","10 Aug: National Day In-Lieu","8 Nov: Deepavali","9 Nov: Deepavali In-Lieu","25 Dec: Christmas Day"],
+      2027: ["1 Jan: New Year's Day","6 Feb: CNY Day 1","7 Feb: CNY Day 2","8 Feb: CNY In-Lieu","10 Mar: Hari Raya Puasa","26 Mar: Good Friday","1 May: Labour Day","16 May: Hari Raya Haji","17 May: Hari Raya Haji In-Lieu","20 May: Vesak Day","9 Aug: National Day","29 Oct: Deepavali","25 Dec: Christmas Day"],
+      2028: ["1 Jan: New Year's Day","26 Jan: CNY Day 1","27 Jan: CNY Day 2","27 Feb: Hari Raya Puasa","14 Apr: Good Friday","1 May: Labour Day","5 May: Hari Raya Haji","8 May: Vesak Day","9 Aug: National Day","17 Oct: Deepavali","25 Dec: Christmas Day"],
+    };
+
+    if (filterYear && SG_PH_BY_YEAR[filterYear]) {
+      const lines = SG_PH_BY_YEAR[filterYear].map(h => `• ${h}`).join('\n');
+      return isZh
+        ? `🇸🇬 ${filterYear}年新加坡公共假期：\n${lines}`
+        : `🇸🇬 Singapore Public Holidays ${filterYear}:\n${lines}`;
+    }
+
     return isZh
-      ? `新加坡主要公共假期：\n• 5月1日：劳动节\n• 5月31日 - 6月1日：卫塞节及补假\n• 8月9日 - 8月10日：国庆日及补假\n• 11月8日 - 11月9日：屠妖节及补假\n• 12月25日：圣诞节`
-      : `Singapore 2026 Public Holidays:\n• 1 May: Labour Day\n• 31 May – 1 Jun: Vesak Day & In-Lieu\n• 9 Aug – 10 Aug: National Day & In-Lieu\n• 8 Nov – 9 Nov: Deepavali & In-Lieu\n• 25 Dec: Christmas Day`;
+      ? `🇸🇬 新加坡主要公共假期（2026年）：\n• 5月1日：劳动节\n• 5月31日 - 6月1日：卫塞节及补假\n• 8月9日 - 8月10日：国庆日及补假\n• 11月8日 - 11月9日：屠妖节及补假\n• 12月25日：圣诞节\n\n如需查询特定年份，请说"2027公共假期"。`
+      : `🇸🇬 Singapore Public Holidays 2026:\n• 1 May: Labour Day\n• 31 May – 1 Jun: Vesak Day & In-Lieu\n• 9 Aug – 10 Aug: National Day & In-Lieu\n• 8 Nov – 9 Nov: Deepavali & In-Lieu\n• 25 Dec: Christmas Day\n\nFor other years, ask e.g. "2027 public holidays".`;
   }
 
   return isZh
