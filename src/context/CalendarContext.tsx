@@ -79,6 +79,50 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEYS.LANG, lang);
     } catch {}
+
+    // Background-translate any events that are missing the target language field
+    setTimeout(() => {
+      setEvents((prev) => {
+        const untranslated = prev.filter((e) =>
+          lang === 'zh' ? !e.titleZh : !e.titleEn
+        );
+        if (untranslated.length === 0) return prev;
+
+        // Fire-and-forget: translate each untranslated event
+        untranslated.forEach(async (ev) => {
+          try {
+            const res = await fetch('/api/translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: ev.title, notes: ev.notes }),
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const updated = {
+              ...ev,
+              titleEn: data.en || ev.title,
+              titleZh: data.zh || ev.title,
+              notesEn: data.notesEn || ev.notes,
+              notesZh: data.notesZh || ev.notes,
+            };
+            // Update local state
+            setEvents((current) =>
+              current.map((e) => (e.id === updated.id ? updated : e))
+            );
+            // Persist to GitHub
+            await fetch('/api/events', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updated),
+            });
+          } catch {
+            // Silent — translation is best-effort
+          }
+        });
+
+        return prev; // No immediate state change — updates come via setEvents above
+      });
+    }, 300);
   };
 
   // Safe localStorage loader helpers
