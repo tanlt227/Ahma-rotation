@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Groq from 'groq-sdk';
-import { readState, updateState } from '../lib/state';
+import { readStateGH, updateStateGH } from '../lib/github';
 import { createGroqChat } from '../lib/groq';
 
 // ---------------------------------------------------------------------------
@@ -221,7 +221,7 @@ ${cnySummary}
 
 async function fetchLiveEvents(): Promise<string> {
   try {
-    const state = await readState();
+    const { state } = await readStateGH();
     const events = state.events ?? [];
 
     if (events.length === 0) return '(no family events saved)';
@@ -446,7 +446,7 @@ Keep answers short and direct (2-3 sentences). Plain text only.`;
                 updatedAt: new Date().toISOString(),
               };
               // Save via updateState directly (avoids needing APP_URL)
-              await updateState((draft) => {
+              await updateStateGH((draft) => {
                 draft.events.push(newEvent);
               });
               return res.status(200).json({ reply: cleanReply || `Done! Added "${newEvent.title}" on ${newEvent.startDate} to the calendar.`, newEvent });
