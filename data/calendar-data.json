@@ -2,13 +2,13 @@
   "events": [
     {
       "id": "ev-1792861536105",
-      "title": "Momm Guizhou",
+      "title": "Mom Guizhou",
       "startDate": "2027-03-17",
       "endDate": "2027-03-27",
       "category": "holiday_plan",
       "memberId": "mom",
-      "createdAt": "2026-10-24T17:05:36.578Z",
-      "updatedAt": "2026-10-24T17:05:36.838Z"
+      "createdAt": "2026-10-24T17:06:21.914Z",
+      "updatedAt": "2026-10-24T17:06:22.178Z"
     }
   ],
   "overrides": [],
@@ -75,6 +75,6 @@
     "junjieAnchorDate": "2026-06-15",
     "junjieCycleWeeks": 3
   },
-  "lastUpdated": "2026-10-24T17:05:36.838Z",
-  "version": 19
+  "lastUpdated": "2026-10-24T17:06:22.178Z",
+  "version": 20
 }
