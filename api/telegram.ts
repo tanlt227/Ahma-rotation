@@ -14,6 +14,14 @@ const GRANDMA_DAYS_PER_LOCATION = 14;
 const GRANDMA_ANCHOR = '2026-05-07';
 const JUNJIE_ANCHOR = '2026-06-15';
 
+const CNY_SCHEDULE: Record<number, { eve: string; day1: string; day2: string; code: string }> = {
+  2026: { eve: '2026-02-16', day1: '2026-02-17', day2: '2026-02-18', code: 'KG' },
+  2027: { eve: '2027-02-05', day1: '2027-02-06', day2: '2027-02-07', code: 'KB' },
+  2028: { eve: '2028-01-25', day1: '2028-01-26', day2: '2028-01-27', code: 'KC' },
+  2029: { eve: '2029-02-12', day1: '2029-02-13', day2: '2029-02-14', code: 'KG' },
+  2030: { eve: '2030-02-02', day1: '2030-02-03', day2: '2030-02-04', code: 'KB' },
+};
+
 // 3-week flat roster (Mon=0 … Sun=6, repeated across 3 weeks)
 const JUNJIE_ROSTER: { name: string; time: string }[] = [
   // Week 1
