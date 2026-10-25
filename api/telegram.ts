@@ -699,15 +699,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const jjToday = getJunjieShift(today);
         const nextLocNow = LOCATION_NAMES[ahmaNow.nextCode] ?? { en: ahmaNow.nextCode, zh: ahmaNow.nextCode };
 
+        // Build 30-day schedule snapshot (covers any "next X weeks" query)
+        const snapshot30 = Array.from({ length: 30 }, (_, i) => {
+          const d = addDaysSGT(i);
+          const a = getAhmaLocation(d);
+          const j = getJunjieShift(d);
+          const aName = LOCATION_NAMES[a.code]?.en ?? a.code;
+          const jStr = j.time ? `${j.name}(${j.time})` : j.name;
+          const ph = SINGAPORE_PUBLIC_HOLIDAYS[d] ? ` [PH:${SINGAPORE_PUBLIC_HOLIDAYS[d]}]` : '';
+          return `${d}:Ahma@${aName}(D${a.dayInStay}/${GRANDMA_DAYS_PER_LOCATION})|JJ:${jStr}${ph}`;
+        }).join('\n');
+
+        // CNY schedule 2026-2035
+        const cnyFull = Object.entries(CNY_SCHEDULE)
+          .map(([yr, c]) => `${yr}: ${LOCATION_NAMES[c.code]?.en ?? c.code} (${c.code}), Eve=${c.eve}`)
+          .join('\n');
+
+        // SG Public Holidays 2026-2028
+        const phByYear: Record<number, string[]> = {
+          2026: ['1 Jan','17-18 Feb CNY','20 Mar Hari Raya Puasa','3 Apr Good Friday','1 May Labour Day','27 May Hari Raya Haji','31 May Vesak Day','1 Jun Vesak In-Lieu','9 Aug National Day','10 Aug National Day In-Lieu','8 Nov Deepavali','9 Nov Deepavali In-Lieu','25 Dec Christmas'],
+          2027: ['1 Jan','6-7 Feb CNY','8 Feb CNY In-Lieu','10 Mar Hari Raya Puasa','26 Mar Good Friday','1 May Labour Day','16 May Hari Raya Haji','17 May Hari Raya Haji In-Lieu','20 May Vesak Day','9 Aug National Day','29 Oct Deepavali','25 Dec Christmas'],
+          2028: ['1 Jan','26-27 Jan CNY','27 Feb Hari Raya Puasa','14 Apr Good Friday','1 May Labour Day','5 May Hari Raya Haji','8 May Vesak Day','9 Aug National Day','17 Oct Deepavali','25 Dec Christmas'],
+          2029: ['1 Jan','CNY ~Feb','Hari Raya Puasa ~Feb/Mar','Good Friday ~Apr','1 May Labour Day','Hari Raya Haji ~May','Vesak Day ~May','9 Aug National Day','Deepavali ~Oct/Nov','25 Dec Christmas'],
+          2030: ['1 Jan','CNY ~Jan/Feb','Hari Raya Puasa ~Jan/Feb','Good Friday ~Apr','1 May Labour Day','Hari Raya Haji ~Apr/May','Vesak Day ~May','9 Aug National Day','Deepavali ~Oct','25 Dec Christmas'],
+        };
+        const phStr = Object.entries(phByYear)
+          .map(([yr, ph]) => `${yr}: ${ph.join(', ')}`)
+          .join('\n');
+
+        // JJ 3-week roster summary for reference
+        const rosterSummary = `Week 1 (Mon-Sun): Night,Night,OFF,REST,Morning,Morning,Morning\nWeek 2: Morning,OFF,Aft1,Aft1,Aft2,Aft2,REST\nWeek 3: OFF,Morning,Morning,Morning,REST,Aft3,Aft3\nShift times: Night=2200-0900, Morning=0630-1530, Aft1=1400-0100, Aft2=1500-0200, Aft3=1600-0100, OFF/REST=no hours\nAnchor: Monday 15 Jun 2026 = Week 1 Mon`;
+
         const systemPrompt = `TODAY IS ${today} (Singapore Time, SGT UTC+8). Use this as the current date for ALL answers.
-You are Ahma Bot 🌸, a warm and friendly family assistant for the "Ahma's Rotation" app.
-Live Calendar Data:
-- Ahma is CURRENTLY at: ${locNow.en} (${ahmaNow.code}), Day ${ahmaNow.dayInStay}/${GRANDMA_DAYS_PER_LOCATION}, ${ahmaNow.daysLeft} days remaining. Moves to ${nextLocNow.en} on ${ahmaNow.nextDate}.
-- Next time Ahma arrives at KC (Kay Cheow / Dad's place / 爸爸家): ${nextKC.date} (in ${nextKC.daysAway} days).
-- Next time Ahma arrives at KG (Kay Guan / 启源): ${nextKG.date} (in ${nextKG.daysAway} days).
-- Next time Ahma arrives at KB (Kay Boon / 启文): ${nextKB.date} (in ${nextKB.daysAway} days).
-- Jun Jie TODAY: ${jjToday.name}${jjToday.time ? ` (${jjToday.time})` : ''} (Week ${jjToday.weekNum} of 3).
-Answer clearly and warmly in ${isZh ? 'Chinese (中文)' : 'English'}. Plain text only.`;
+You are Ahma Bot 🌸, a warm and friendly family assistant for the "Ahma's Rotation" app. You can answer questions about ANY future date using the rotation rules below.
+
+=== LIVE DATA ===
+Ahma NOW: ${locNow.en} (${ahmaNow.code}), Day ${ahmaNow.dayInStay}/${GRANDMA_DAYS_PER_LOCATION}, ${ahmaNow.daysLeft} days left → ${nextLocNow.en} on ${ahmaNow.nextDate}
+Next KC arrival: ${nextKC.date} (in ${nextKC.daysAway} days)
+Next KG arrival: ${nextKG.date} (in ${nextKG.daysAway} days)
+Next KB arrival: ${nextKB.date} (in ${nextKB.daysAway} days)
+Jun Jie TODAY: ${jjToday.name}${jjToday.time ? ` (${jjToday.time})` : ''} (Week ${jjToday.weekNum}/3)
+
+=== 30-DAY SCHEDULE (use for next few weeks queries) ===
+${snapshot30}
+
+=== AHMA ROTATION RULES (use to answer ANY future date) ===
+- Rotates KC → KG → KB, 14 days each, repeating indefinitely
+- Anchor: 7 May 2026 = Day 1 at KC
+- To find any date: count days from anchor, divide by 42 (3×14), remainder determines location
+- KC = Kay Cheow = Dad's place (爸爸家) — all three mean the same
+- CNY special (Eve 5pm → Day 2 8pm, overrides normal rotation):
+${cnyFull}
+
+=== JUN JIE SHIFT ROSTER (use to answer ANY future date) ===
+${rosterSummary}
+
+=== SINGAPORE PUBLIC HOLIDAYS (by year) ===
+${phStr}
+
+ANSWER RULES:
+- For any date question, USE THE RULES ABOVE to compute the answer — do not say you don't have data
+- For "2027 schedule" or any year, compute from the anchor/rotation rules
+- Respond in ${isZh ? 'Chinese (中文)' : 'English'}. Plain text, warm and concise.`;
 
         if (GROQ_KEY) {
           replyText = await callGroqDirect(GROQ_KEY, systemPrompt, userText);
