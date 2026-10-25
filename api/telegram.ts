@@ -299,7 +299,7 @@ async function callGroqDirect(apiKey: string, systemPrompt: string, userMessage:
             { role: 'user', content: userMessage },
           ],
           temperature: 0.7,
-          max_tokens: 1024,
+          max_tokens: 512,
           reasoning_effort: 'none',
         }),
       });
@@ -699,8 +699,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const jjToday = getJunjieShift(today);
         const nextLocNow = LOCATION_NAMES[ahmaNow.nextCode] ?? { en: ahmaNow.nextCode, zh: ahmaNow.nextCode };
 
-        // Build 30-day schedule snapshot (covers any "next X weeks" query)
-        const snapshot30 = Array.from({ length: 30 }, (_, i) => {
+        // Build 14-day schedule snapshot
+        const snapshot30 = Array.from({ length: 14 }, (_, i) => {
           const d = addDaysSGT(i);
           const a = getAhmaLocation(d);
           const j = getJunjieShift(d);
@@ -779,8 +779,11 @@ ANSWER RULES:
       replyText = isZh ? '抱歉，我未能理解，请再试一次。' : 'Sorry, I could not process that. Please try again.';
     }
 
+    // Respond to Telegram immediately to avoid 5-second webhook timeout
+    res.status(200).end();
+
+    // Send the reply asynchronously after acknowledging
     await sendTelegramMessage(TELEGRAM_TOKEN, chatId, replyText);
-    return res.status(200).end();
   } catch (err: any) {
     console.error('[telegram] Fatal handler error caught:', err);
     // Always return HTTP 200 so Telegram and Vercel do not display 500 error screens
