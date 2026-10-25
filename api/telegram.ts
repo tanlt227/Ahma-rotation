@@ -718,7 +718,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return `${d}:Ahma@${aName}(D${a.dayInStay}/${GRANDMA_DAYS_PER_LOCATION})|JJ:${jStr}${ph}`;
         }).join('\n');
 
-        // CNY schedule 2026-2035
+        // Pre-compute answer for queried date
+        const queriedDate = extractDate(userText) || today;
+        const queriedAhma = getAhmaLocation(queriedDate);
+        const queriedJJ = getJunjieShift(queriedDate);
+        const queriedAhmaName = LOCATION_NAMES[queriedAhma.code]?.en ?? queriedAhma.code;
+        const queriedJJStr = queriedJJ.time ? `${queriedJJ.name} (${queriedJJ.time})` : queriedJJ.name;
+        const preComputed = `PRE-COMPUTED ANSWER for ${queriedDate}: Ahma is at ${queriedAhmaName} (${queriedAhma.code}), Day ${queriedAhma.dayInStay}/${GRANDMA_DAYS_PER_LOCATION}. Jun Jie is on ${queriedJJStr} (Week ${queriedJJ.weekNum}/3).`;
+
+        // CNY schedule
         const cnyFull = Object.entries(CNY_SCHEDULE)
           .map(([yr, c]) => `${yr}: ${LOCATION_NAMES[c.code]?.en ?? c.code} (${c.code}), Eve=${c.eve}`)
           .join('\n');
@@ -740,6 +748,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const systemPrompt = `TODAY IS ${today} (Singapore Time, SGT UTC+8). Use this as the current date for ALL answers.
 You are Ahma Bot 🌸, a warm and friendly family assistant for the "Ahma's Rotation" app. You can answer questions about ANY future date using the rotation rules below.
+
+=== PRE-COMPUTED ANSWER (use this directly, no calculation needed) ===
+${preComputed}
 
 === LIVE DATA ===
 Ahma NOW: ${locNow.en} (${ahmaNow.code}), Day ${ahmaNow.dayInStay}/${GRANDMA_DAYS_PER_LOCATION}, ${ahmaNow.daysLeft} days left → ${nextLocNow.en} on ${ahmaNow.nextDate}
@@ -768,6 +779,10 @@ ${phStr}
 ANSWER RULES:
 - For any date question, USE THE RULES ABOVE to compute the answer — do not say you don't have data
 - For "2027 schedule" or any year, compute from the anchor/rotation rules
+- NEVER show your working, calculations, or step-by-step reasoning — just give the direct answer
+- For shift questions: just say the shift name and time, e.g. "Jun Jie is on Morning shift (0630-1530)"
+- For Ahma questions: just say the location, e.g. "Ahma is at Kay Cheow (KC)"
+- Keep answers to 1-2 sentences maximum unless more detail is explicitly requested
 - Respond in ${isZh ? 'Chinese (中文)' : 'English'}. Plain text, warm and concise.`;
 
         if (GROQ_KEY) {
@@ -776,7 +791,26 @@ ANSWER RULES:
           const timeoutPromise = new Promise<string>((resolve) =>
             setTimeout(() => resolve(''), 4000)
           );
-          replyText = await Promise.race([groqPromise, timeoutPromise]);
+          let groqReply = await Promise.race([groqPromise, timeoutPromise]);
+
+          // Strip reasoning leakage — if reply contains step-by-step calc markers, take only final answer
+          if (groqReply) {
+            // Remove lines that look like calculation steps (numbered lists, asterisk bullets with math)
+            const lines = groqReply.split('\n').filter(line => {
+              const l = line.trim();
+              // Drop lines that are calculation steps
+              if (/^\d+\.\s+\*\*/.test(l)) return false;  // "1. **Calculate...**"
+              if (/^\*\s+\*\*/.test(l)) return false;       // "*  **Anchor:**"
+              if (/anchor.*date|days?\s+(difference|left|from|since)|÷|remainder|week\s+position|roster\s+position/i.test(l)) return false;
+              return true;
+            });
+            groqReply = lines.join('\n').trim();
+            // If still too long (>500 chars) and contains calc artifacts, use local answer
+            if (groqReply.length > 500 && groqReply.includes('**')) {
+              groqReply = '';
+            }
+          }
+          replyText = groqReply;
         } else if (GEMINI_KEY) {
           replyText = await callGeminiDirect(GEMINI_KEY, systemPrompt, userText);
         }
