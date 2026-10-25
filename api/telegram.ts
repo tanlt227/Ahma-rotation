@@ -763,7 +763,12 @@ ANSWER RULES:
 - Respond in ${isZh ? 'Chinese (中文)' : 'English'}. Plain text, warm and concise.`;
 
         if (GROQ_KEY) {
-          replyText = await callGroqDirect(GROQ_KEY, systemPrompt, userText);
+          // Race Groq against a 4s timeout to stay within Telegram's 5s webhook limit
+          const groqPromise = callGroqDirect(GROQ_KEY, systemPrompt, userText);
+          const timeoutPromise = new Promise<string>((resolve) =>
+            setTimeout(() => resolve(''), 4000)
+          );
+          replyText = await Promise.race([groqPromise, timeoutPromise]);
         } else if (GEMINI_KEY) {
           replyText = await callGeminiDirect(GEMINI_KEY, systemPrompt, userText);
         }
@@ -779,11 +784,8 @@ ANSWER RULES:
       replyText = isZh ? '抱歉，我未能理解，请再试一次。' : 'Sorry, I could not process that. Please try again.';
     }
 
-    // Respond to Telegram immediately to avoid 5-second webhook timeout
-    res.status(200).end();
-
-    // Send the reply asynchronously after acknowledging
     await sendTelegramMessage(TELEGRAM_TOKEN, chatId, replyText);
+    return res.status(200).end();
   } catch (err: any) {
     console.error('[telegram] Fatal handler error caught:', err);
     // Always return HTTP 200 so Telegram and Vercel do not display 500 error screens
