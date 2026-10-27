@@ -9,15 +9,6 @@
       "memberId": "mom",
       "createdAt": "2026-10-24T17:06:21.914Z",
       "updatedAt": "2026-10-24T17:06:22.178Z"
-    },
-    {
-      "id": "debug-test-1793073356423",
-      "title": "Debug Test Event",
-      "startDate": "2099-01-01",
-      "category": "general",
-      "memberId": "all",
-      "createdAt": "2026-10-27T03:55:56.423Z",
-      "updatedAt": "2026-10-27T03:55:56.996Z"
     }
   ],
   "overrides": [],
@@ -84,6 +75,6 @@
     "junjieAnchorDate": "2026-06-15",
     "junjieCycleWeeks": 3
   },
-  "lastUpdated": "2026-10-27T03:55:56.996Z",
-  "version": 22
+  "lastUpdated": "2026-10-27T03:55:58.604Z",
+  "version": 23
 }
